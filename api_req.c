@@ -1,5 +1,6 @@
 #include "api_req.h"
 
+// git clone https://github.com/curl/curl.git
 // https://gist.github.com/nolim1t/126991/ae3a7d36470d2a81190339fbc78821076a4059f7
 // https://github.com/ppelleti/https-example/blob/master/https-client.c
 // https://stackoverflow.com/questions/40303354/how-to-make-an-https-request-in-c
