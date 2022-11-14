@@ -4,6 +4,7 @@
 // https://github.com/ppelleti/https-example/blob/master/https-client.c
 // https://stackoverflow.com/questions/40303354/how-to-make-an-https-request-in-c
 // https://stackoverflow.com/questions/22077802/simple-c-example-of-doing-an-http-post-and-consuming-the-response
+// https://stackoverflow.com/questions/62387069/golang-parse-raw-http-2-response
 
 #define NUM_THREAD 5
 
