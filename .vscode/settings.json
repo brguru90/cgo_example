@@ -2,6 +2,10 @@
     "files.associations": {
         "Dockerfile-alternate__update_missing_tb_action_data": "dockerfile",
         "stdio.h": "c",
-        "api_req.h": "c"
+        "api_req.h": "c",
+        "curl.h": "c",
+        "random": "c",
+        "stdbool.h": "c",
+        "easy.h": "c"
     }
 }

@@ -6,6 +6,8 @@ package main
 #include "api_req.h"
 #cgo CFLAGS: -g -Wall
 #cgo LDFLAGS: -L${SRCDIR} api_req.so
+#cgo LDFLAGS: -L${SRCDIR}/curl/lib
+#cgo CFLAGS: -I${SRCDIR}/curl/include
 */
 import "C"
 import (
@@ -41,31 +43,29 @@ func check_error(err error) {
 }
 
 func call_api() {
-	url:="http://localhost:8000/api/test"
+	url := "http://localhost:8000/api/test"
 	// url:="https://jsonplaceholder.typicode.com/posts"
 	req, err := http.NewRequest("GET", url, nil)
 	check_error(err)
 	reqDump, err := httputil.DumpRequestOut(req, true)
-	s_port:=req.URL.Port()
-	if s_port==""{
-		if strings.HasPrefix(req.URL.String(),"http://"){
-			s_port="80"
-		} else if strings.HasPrefix(req.URL.String(),"https://"){
-			s_port="443"
+	s_port := req.URL.Port()
+	if s_port == "" {
+		if strings.HasPrefix(req.URL.String(), "http://") {
+			s_port = "80"
+		} else if strings.HasPrefix(req.URL.String(), "https://") {
+			s_port = "443"
 		}
 	}
-	port,err:=strconv.Atoi(s_port)
+	port, err := strconv.Atoi(s_port)
 	check_error(err)
-
 
 	host := C.CString(req.URL.Hostname())
 	defer C.free(unsafe.Pointer(host))
 
-
 	raw_req := C.CString(string(reqDump))
 	defer C.free(unsafe.Pointer(raw_req))
 
-	C.send_raw_request(host, C.uint16_t(port),req.URL.Scheme=="https", raw_req, 4)
+	C.send_raw_request(host, C.uint16_t(port), req.URL.Scheme == "https", raw_req, 4)
 }
 
 func main() {

@@ -22,6 +22,10 @@
 #include <stdbool.h>
 #endif
 
+
+#include "curl/curl.h"
+
+
 typedef struct SockType
 {
     char ip[20];
