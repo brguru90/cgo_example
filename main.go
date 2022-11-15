@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httputil"
-	"strconv"
 	"strings"
 	"unsafe"
 )
@@ -44,7 +43,8 @@ func check_error(err error) {
 }
 
 func call_api() {
-	url := "http://localhost:8000/api/test"
+	// url := "http://localhost:8000/api/test"
+	url:="http://guruinfo.epizy.com/edu.php"
 	// url:="https://jsonplaceholder.typicode.com/posts"
 	req, err := http.NewRequest("GET", url, nil)
 	check_error(err)
@@ -57,17 +57,17 @@ func call_api() {
 			s_port = "443"
 		}
 	}
-	port, err := strconv.Atoi(s_port)
-	check_error(err)
+	// port, err := strconv.Atoi(s_port)
+	// check_error(err)
 
 	// host := C.CString(req.URL.Hostname())
-	host := C.CString(url)
-	defer C.free(unsafe.Pointer(host))
+	c_url := C.CString(url)
+	defer C.free(unsafe.Pointer(c_url))
 
 	raw_req := C.CString(string(reqDump))
 	defer C.free(unsafe.Pointer(raw_req))
 
-	C.send_raw_request(host, C.uint16_t(port), req.URL.Scheme == "https", raw_req, 4)
+	C.send_raw_request(c_url, req.URL.Scheme == "https", raw_req, 1)
 }
 
 func main() {

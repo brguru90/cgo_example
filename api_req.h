@@ -26,24 +26,18 @@
 #include <curl/curl.h>
 
 
-typedef struct SockType
-{
-    char ip[20];
-    int socket;
-    SSL *secureConn;
-    int port;
-} sock_type;
+
 
 typedef struct ResponseData
 {
     char *response;
     time_t before_connect_time;
-    time_t connect_time;
-    time_t time_at_first_byte;
+    long connect_time_microsec;
+    long time_at_first_byte_microsec;
 } response_data;
 
 void run_bulk_api_request(char *s);
 void *goCallback_wrap(void *vargp);
 extern void goCallback(int myid);
 
-response_data send_raw_request(char *host, in_port_t port, bool secure, char *raw_req, int debug);
+response_data send_raw_request(char *url, bool secure, char *raw_req, int debug);
