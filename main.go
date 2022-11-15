@@ -41,8 +41,9 @@ func check_error(err error) {
 }
 
 func call_api() {
-	url:="http://localhost:8000/api/test"
+	// url:="http://localhost:8000/api/test"
 	// url:="https://jsonplaceholder.typicode.com/posts"
+	url:="http://guruinfo.epizy.com/edu.php"
 	req, err := http.NewRequest("GET", url, nil)
 	check_error(err)
 	reqDump, err := httputil.DumpRequestOut(req, true)

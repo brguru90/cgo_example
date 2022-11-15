@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -7,6 +8,8 @@
 
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h>
+
 
 #include <netinet/tcp.h>
 #include <sys/socket.h>
