@@ -23,7 +23,7 @@
 #endif
 
 
-#include "curl/curl.h"
+#include <curl/curl.h>
 
 
 typedef struct SockType
@@ -44,6 +44,6 @@ typedef struct ResponseData
 
 void run_bulk_api_request(char *s);
 void *goCallback_wrap(void *vargp);
-void goCallback(int myid);
+extern void goCallback(int myid);
 
 response_data send_raw_request(char *host, in_port_t port, bool secure, char *raw_req, int debug);

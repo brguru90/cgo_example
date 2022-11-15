@@ -1,13 +1,14 @@
 package main
 
 /*
+#cgo linux pkg-config: libcurl
+#cgo darwin LDFLAGS: -lcurl
+#cgo windows LDFLAGS: -lcurl
 #include <stdlib.h>
 #include <string.h>
 #include "api_req.h"
 #cgo CFLAGS: -g -Wall
 #cgo LDFLAGS: -L${SRCDIR} api_req.so
-#cgo LDFLAGS: -L${SRCDIR}/curl/lib
-#cgo CFLAGS: -I${SRCDIR}/curl/include
 */
 import "C"
 import (
@@ -59,7 +60,8 @@ func call_api() {
 	port, err := strconv.Atoi(s_port)
 	check_error(err)
 
-	host := C.CString(req.URL.Hostname())
+	// host := C.CString(req.URL.Hostname())
+	host := C.CString(url)
 	defer C.free(unsafe.Pointer(host))
 
 	raw_req := C.CString(string(reqDump))

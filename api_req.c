@@ -178,36 +178,39 @@ void run_bulk_api_request(char *s)
 //     return rd;
 // }
 
+
 static int wait_on_socket(curl_socket_t sockfd, int for_recv, long timeout_ms)
 {
-  struct timeval tv;
-  fd_set infd, outfd, errfd;
-  int res;
- 
-  tv.tv_sec = timeout_ms / 1000;
-  tv.tv_usec = (timeout_ms % 1000) * 1000;
- 
-  FD_ZERO(&infd);
-  FD_ZERO(&outfd);
-  FD_ZERO(&errfd);
- 
-  FD_SET(sockfd, &errfd); /* always check for error */
- 
-  if(for_recv) {
-    FD_SET(sockfd, &infd);
-  }
-  else {
-    FD_SET(sockfd, &outfd);
-  }
- 
-  /* select() returns the number of signalled sockets or -1 */
-  res = select((int)sockfd + 1, &infd, &outfd, &errfd, &tv);
-  return res;
+    struct timeval tv;
+    fd_set infd, outfd, errfd;
+    int res;
+
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    FD_ZERO(&infd);
+    FD_ZERO(&outfd);
+    FD_ZERO(&errfd);
+
+    FD_SET(sockfd, &errfd); /* always check for error */
+
+    if (for_recv)
+    {
+        FD_SET(sockfd, &infd);
+    }
+    else
+    {
+        FD_SET(sockfd, &outfd);
+    }
+
+    /* select() returns the number of signalled sockets or -1 */
+    res = select((int)sockfd + 1, &infd, &outfd, &errfd, &tv);
+    return res;
 }
 
 response_data send_raw_request(char *host, in_port_t port, bool secure, char *raw_req, int debug)
 {
-    printf("%s",host);
+    printf("%s\n", host);
     CURL *curl;
     CURLcode res;
     curl_global_init(CURL_GLOBAL_ALL);
@@ -215,13 +218,20 @@ response_data send_raw_request(char *host, in_port_t port, bool secure, char *ra
     if (curl)
     {
         curl_socket_t sockfd;
-        curl_easy_setopt(curl, CURLOPT_URL, "http://postit.example.com/moo.cgi");
+        curl_easy_setopt(curl, CURLOPT_URL, host);
         curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
+        curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 0);  
+
         /* Perform the request, res will get the return code */
         res = curl_easy_perform(curl);
         /* Check for errors */
         if (res == CURLE_OK)
         {
+            if (debug > 0)
+            {
+                printf("connected to server\n");
+            }
             size_t nsent = 0;
             res = curl_easy_getinfo(curl, CURLINFO_ACTIVESOCKET, &sockfd);
             res = curl_easy_send(curl, raw_req, strlen(raw_req), &nsent);
@@ -230,27 +240,42 @@ response_data send_raw_request(char *host, in_port_t port, bool secure, char *ra
                 printf("Error: %s\n", curl_easy_strerror(res));
                 exit(1);
             }
-
+            if (debug > 0)
+            {
+                printf("request sent\n");
+            }
+            
+            char *resp_str = malloc(1);
             for (;;)
             {
                 /* Warning: This example program may loop indefinitely (see above). */
                 char buf[1024];
                 size_t nread;
+                bool timed_out = false;
                 do
                 {
                     nread = 0;
                     res = curl_easy_recv(curl, buf, sizeof(buf), &nread);
 
-                    if (res == CURLE_AGAIN && !wait_on_socket(sockfd, 1, 60000L))
+                    if (strlen(buf) > 0)
                     {
-                        printf("Error: timeout.\n");
-                        exit(1);
+                        // resp_str=realloc(resp_str,strlen(resp_str)+strlen(buf)+1);
+                        strcat(resp_str, buf);
+                    }
+                    // printf("resp_str=%s\n",resp_str);
+
+                    if (res == CURLE_AGAIN && !wait_on_socket(sockfd, 1, 10))
+                    {
+                        timed_out = true;
+                        // printf("Error: timeout.\n");
+                        // exit(1);
+                        break;
                     }
                 } while (res == CURLE_AGAIN);
 
-                if (res != CURLE_OK)
+                if (timed_out==false && res != CURLE_OK)
                 {
-                    printf("Error: %s\n", curl_easy_strerror(res));
+                    printf("Error: %s,%d\n", curl_easy_strerror(res), res);
                     break;
                 }
 
@@ -261,6 +286,23 @@ response_data send_raw_request(char *host, in_port_t port, bool secure, char *ra
                 }
 
                 printf("Received %lu bytes.\n", (unsigned long)nread);
+            }
+            printf("%s\n", resp_str);
+        }
+        else
+        {
+            if (debug > 0)
+            {
+                switch (res)
+                {
+                case CURLE_COULDNT_CONNECT:
+                    printf("Unable to connect");
+                    break;
+
+                default:
+                    printf("curl error,%d\n", res);
+                    break;
+                }
             }
         }
         curl_easy_cleanup(curl);
