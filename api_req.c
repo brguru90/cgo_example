@@ -46,11 +46,14 @@ void run_bulk_api_request(char *s)
     goCallback(-1);
 }
 
-struct memory
+
+
+long long get_current_time()
 {
-    char *data;
-    size_t size;
-};
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (((long long)tv.tv_sec) * 1000) + (tv.tv_usec / 1000);
+}
 
 static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp)
 {
@@ -69,8 +72,10 @@ static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp
     return realsize;
 }
 
-response_data send_raw_request(char *url, bool secure, request_input *req_input, int debug)
+void send_raw_request(char *url, bool secure, request_input *req_input,response_data* response_ref, int debug)
 {
+    response_data res_data;
+    res_data.status_code=-2;
     if (debug > 0)
     {
         printf("%s\n", url);
@@ -94,8 +99,9 @@ response_data send_raw_request(char *url, bool secure, request_input *req_input,
     {
         long response_code;
         curl_off_t start = -1, connect = -1, total = -1;
-        struct memory chunk = {0}, header = {0};
+        struct memory body = {0}, header = {0};
         // to request
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, (long)debug);
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 0);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -105,9 +111,10 @@ response_data send_raw_request(char *url, bool secure, request_input *req_input,
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req_input->method); 
 
 
+
         // from response
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, response_writer);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&body);
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, &header);
         curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, response_writer);
 
@@ -122,6 +129,7 @@ response_data send_raw_request(char *url, bool secure, request_input *req_input,
         // chunked, see?
         // UA
 
+        res_data.before_connect_time=get_current_time();
         res = curl_easy_perform(curl);
         /* Check for errors */
         if (res != CURLE_OK)
@@ -153,10 +161,18 @@ response_data send_raw_request(char *url, bool secure, request_input *req_input,
         {
             printf("status_code=%ld\n", response_code);
             printf("connect=%lf,ttfb=%lf,total=%lf\n", connect / 1e6, start / 1e6, total / 1e6);
-            printf("%s\n%s\n", header.data, chunk.data);
+            printf("%s\n%s\n", header.data, body.data);
         }
+
+        res_data.status_code=response_code;
+        res_data.connect_time_microsec=connect;
+        res_data.time_at_first_byte_microsec=start;
+        res_data.total_time_microsec=total;
+        res_data.response_header=header.data;
+        res_data.response_body=body.data;
 
         curl_easy_cleanup(curl);
     }
     curl_global_cleanup();
+    *response_ref=res_data;
 }

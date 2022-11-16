@@ -39,14 +39,24 @@ typedef struct SingleRequestInput
 
 typedef struct ResponseData
 {
-    char *response;
-    time_t before_connect_time;
+    char *response_header;
+    char *response_body;
+    // time_t before_connect_time; //long int
+    long long before_connect_time;
     long connect_time_microsec;
     long time_at_first_byte_microsec;
+    long total_time_microsec;
+    int status_code;
 } response_data;
+
+struct memory
+{
+    char *data;
+    size_t size;
+};
 
 void run_bulk_api_request(char *s);
 void *goCallback_wrap(void *vargp);
 extern void goCallback(int myid);
 
-response_data send_raw_request(char *url, bool secure, request_input *req_input, int debug);
+void send_raw_request(char *url, bool secure, request_input *req_input,response_data* response_ref, int debug);
