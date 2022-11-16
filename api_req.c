@@ -46,8 +46,6 @@ void run_bulk_api_request(char *s)
     goCallback(-1);
 }
 
-
-
 long long get_current_time()
 {
     struct timeval tv;
@@ -72,25 +70,26 @@ static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp
     return realsize;
 }
 
-void send_raw_request(char *url, bool secure, request_input *req_input,response_data* response_ref, int debug)
+void send_raw_request(request_input *req_input, response_data *response_ref, int debug)
 {
     response_data res_data;
-    res_data.status_code=-2;
+    res_data.status_code = -2;
     if (debug > 0)
     {
-        printf("%s\n", url);
-        printf("%s\n",req_input->url);
-        printf("header count=%d\n\n",req_input->headers_len);
-        printf("%s\n\n",req_input->headers[0].header);
-        printf("body=%s\n\n",req_input->body);
+        printf("%s\n", req_input->url);
+        printf("header count=%d\n\n", req_input->headers_len);
+        printf("%s\n\n", req_input->headers[0].header);
+        printf("body=%s\n\n", req_input->body);
     }
     CURL *curl;
     CURLcode res;
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
-    struct curl_slist *header_list=NULL;
-    if(req_input->headers_len>0){
-        for(int i=0;i<req_input->headers_len;i++){
+    struct curl_slist *header_list = NULL;
+    if (req_input->headers_len > 0)
+    {
+        for (int i = 0; i < req_input->headers_len; i++)
+        {
             curl_slist_append(header_list, req_input->headers[i].header);
         }
     }
@@ -102,15 +101,13 @@ void send_raw_request(char *url, bool secure, request_input *req_input,response_
         struct memory body = {0}, header = {0};
         // to request
         curl_easy_setopt(curl, CURLOPT_VERBOSE, (long)debug);
-        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_URL, req_input->url);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 0);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "cgo benchmark tool");
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req_input->body); 
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req_input->method); 
-
-
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req_input->body);
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req_input->method);
 
         // from response
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, response_writer);
@@ -129,7 +126,7 @@ void send_raw_request(char *url, bool secure, request_input *req_input,response_
         // chunked, see?
         // UA
 
-        res_data.before_connect_time=get_current_time();
+        res_data.before_connect_time = get_current_time();
         res = curl_easy_perform(curl);
         /* Check for errors */
         if (res != CURLE_OK)
@@ -164,15 +161,47 @@ void send_raw_request(char *url, bool secure, request_input *req_input,response_
             printf("%s\n%s\n", header.data, body.data);
         }
 
-        res_data.status_code=response_code;
-        res_data.connect_time_microsec=connect;
-        res_data.time_at_first_byte_microsec=start;
-        res_data.total_time_microsec=total;
-        res_data.response_header=header.data;
-        res_data.response_body=body.data;
+        res_data.status_code = response_code;
+        res_data.connect_time_microsec = connect;
+        res_data.time_at_first_byte_microsec = start;
+        res_data.total_time_microsec = total;
+        res_data.response_header = header.data;
+        res_data.response_body = body.data;
 
         curl_easy_cleanup(curl);
     }
     curl_global_cleanup();
-    *response_ref=res_data;
+    *response_ref = res_data;
+}
+
+void *send_raw_request_wrap_for_thread(void *data)
+{
+    thread_data *td = (thread_data *)data;
+    send_raw_request(td->req_res.req_inputs_ptr,td->req_res.response_ref_ptr,*td->req_res.debug_flag);
+}
+
+void send_request_concurrently(request_input *req_inputs, response_data *response_ref,int total_requests, int debug)
+{
+
+    int i;
+    pthread_t *threads = malloc(sizeof(pthread_t) * total_requests);
+    thread_data *threads_data = malloc(sizeof(thread_data) * total_requests);
+
+    for (i = 0; i < total_requests; i++)
+    {
+        threads_data[i].req_res.req_inputs_ptr = &req_inputs[i];
+        threads_data[i].req_res.response_ref_ptr = &response_ref[i];
+        threads_data[i].req_res.debug_flag = &debug;
+        threads_data->thread_id = i;
+    }
+
+    for (i = 0; i < total_requests; i++)
+    {
+        pthread_create(&threads[i], NULL, send_raw_request_wrap_for_thread, (void *)&threads_data[i]);
+    }
+
+    for (i = 0; i < total_requests; i++)
+    {
+        pthread_join(threads[i], NULL);
+    }
 }

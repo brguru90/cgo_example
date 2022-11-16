@@ -18,6 +18,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"unsafe"
 )
@@ -94,8 +95,9 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func call_api() {
-	// url := "http://localhost:8000/api/hello/1?query=text"
-	url := "http://guruinfo.epizy.com/edu.php"
+	total_requests:=5
+	url := "http://localhost:8000/api/hello/1?query=text"
+	// url := "http://guruinfo.epizy.com/edu.php"
 	// url:="https://jsonplaceholder.typicode.com/posts"
 	// url:="https://google.com/"
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte("some string")))
@@ -114,9 +116,13 @@ func call_api() {
 	c_url := C.CString(url)
 	defer C.free(unsafe.Pointer(c_url))
 
-	c_request_input := C.malloc(C.size_t(5) * C.sizeof_struct_SingleRequestInput)
-	defer C.free(unsafe.Pointer(c_request_input))
-	request_input := (*[1<<30 - 1]C.struct_SingleRequestInput)(c_request_input)
+	// fmt.Println("-------",C.size_t(2) * C.sizeof_struct_SingleRequestInput)
+
+	// c_request_input := C.malloc(C.size_t(5) * C.sizeof_struct_SingleRequestInput)
+	// defer C.free(unsafe.Pointer(c_request_input))
+	// request_input := (*[1<<30 - 1]C.struct_SingleRequestInput)(c_request_input)
+
+	request_input := make([]C.struct_SingleRequestInput, total_requests)
 
 	c_headers := C.malloc(C.size_t(len(req.Header)) * C.sizeof_struct_Headers)
 	defer C.free(unsafe.Pointer(c_headers))
@@ -134,21 +140,33 @@ func call_api() {
 	Body, _ := req.GetBody()
 	body, _ := ioutil.ReadAll(Body)
 
-	request_input[0] = C.struct_SingleRequestInput{
-		url:         c_url,
-		method:      C.CString(req.Method),
-		headers:     (*C.struct_Headers)(c_headers),
-		headers_len: C.int(len(req.Header)),
-		body:        C.CString(string(body)),
+	for i = 0; i < total_requests; i++ {
+		request_input[i] = C.struct_SingleRequestInput{
+			url:         C.CString("http://localhost:8000/api/test/"+strconv.Itoa(i)),
+			method:      C.CString(req.Method),
+			headers:     (*C.struct_Headers)(c_headers),
+			headers_len: C.int(len(req.Header)),
+			body:        C.CString(string(body)),
+		}
 	}
 
-	var response_data C.struct_ResponseData
+	// var response_data C.struct_ResponseData
 
-	C.send_raw_request(c_url, req.URL.Scheme == "https", &(request_input[0]), &response_data, 0)
-	fmt.Println(int(response_data.status_code))
-	resp, err := parseHttpResponse(C.GoString(response_data.response_header), C.GoString(response_data.response_body), nil)
-	body2, err := ioutil.ReadAll(resp.Body)
-	fmt.Println(string(body2), err)
+	bulk_response_data := make([]C.struct_ResponseData, total_requests)
+
+	C.send_request_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), 1)
+
+	for i = 0; i < total_requests; i++ {
+		fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))
+	}
+
+	// fmt.Println(int(response_data.status_code))
+
+	// C.send_raw_request(&(request_input[0]), &response_data, 0)
+	// fmt.Println(int(response_data.status_code))
+	// resp, err := parseHttpResponse(C.GoString(response_data.response_header), C.GoString(response_data.response_body), nil)
+	// body2, err := ioutil.ReadAll(resp.Body)
+	// fmt.Println(string(body2), err)
 }
 
 func main() {
