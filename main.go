@@ -12,12 +12,17 @@ package main
 */
 import "C"
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"strings"
 	"unsafe"
 )
+
+// https://stackoverflow.com/questions/65562170/go-pointer-stored-into-non-go-memory
+// https://stackoverflow.com/questions/41492071/how-do-i-convert-a-go-array-of-strings-to-a-c-array-of-strings
 
 var gchan chan int
 
@@ -43,10 +48,19 @@ func check_error(err error) {
 }
 
 func call_api() {
-	// url := "http://localhost:8000/api/test"
-	url:="http://guruinfo.epizy.com/edu.php"
+	url := "http://localhost:8000/api/hello/1?query=text"
+	// url := "http://guruinfo.epizy.com/edu.php"
 	// url:="https://jsonplaceholder.typicode.com/posts"
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte("some string")))
+	req.Header.Add("some header", "its value")
+	req.Header.Add("some header2", "its value2")
+
+	// Body, _ :=req.GetBody()
+	// body,_:=ioutil.ReadAll(Body)
+	// fmt.Printf("request body=%s\n",string(body))
+	// Body, _ =req.GetBody()
+	// body,_=ioutil.ReadAll(Body)
+	// fmt.Printf("request body=%s\n",string(body))
 	check_error(err)
 	reqDump, err := httputil.DumpRequestOut(req, true)
 	s_port := req.URL.Port()
@@ -67,7 +81,38 @@ func call_api() {
 	raw_req := C.CString(string(reqDump))
 	defer C.free(unsafe.Pointer(raw_req))
 
-	C.send_raw_request(c_url, req.URL.Scheme == "https", raw_req, 1)
+	c_request_input := C.malloc(C.size_t(5) * C.sizeof_struct_SingleRequestInput)
+	defer C.free(unsafe.Pointer(c_request_input))
+	request_input := (*[1<<30 - 1]C.struct_SingleRequestInput)(c_request_input)
+
+	c_headers := C.malloc(C.size_t(len(req.Header)) * C.sizeof_struct_Headers)
+	defer C.free(unsafe.Pointer(c_headers))
+	headers_data := (*[1<<30 - 1]C.struct_Headers)(c_headers)
+	var i int = 0
+	for name, values := range req.Header {
+		// Loop over all values for the name.
+		for _, value := range values {
+			// fmt.Println(name, value)
+			// headers = append(headers, name+": "+value)
+			headers_data[i] = C.struct_Headers{
+				header: C.CString(name + ": " + value),
+			}
+			i++
+		}
+	}
+
+	Body, _ := req.GetBody()
+	body, _ := ioutil.ReadAll(Body)
+
+	request_input[0] = C.struct_SingleRequestInput{
+		url:         c_url,
+		method:      C.CString(req.Method),
+		headers:     (*C.struct_Headers)(c_headers),
+		headers_len: C.int(len(req.Header)),
+		body: C.CString(string(body)),
+	}
+
+	C.send_raw_request(c_url, req.URL.Scheme == "https", &(request_input[0]), 1)
 }
 
 func main() {

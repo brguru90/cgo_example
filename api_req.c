@@ -69,17 +69,27 @@ static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp
     return realsize;
 }
 
-response_data send_raw_request(char *url, bool secure, char *raw_req, int debug)
+response_data send_raw_request(char *url, bool secure, request_input *req_input, int debug)
 {
-    if (debug > 1)
+    if (debug > 0)
     {
         printf("%s\n", url);
+        printf("%s\n",req_input->url);
+        printf("header count=%d\n\n",req_input->headers_len);
+        printf("%s\n\n",req_input->headers[0].header);
+        printf("body=%s\n\n",req_input->body);
     }
     CURL *curl;
     CURLcode res;
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
-    struct curl_slist *header_list = curl_slist_append(NULL, "Content-Type: text/html");
+    struct curl_slist *header_list=NULL;
+    if(req_input->headers_len>0){
+        for(int i=0;i<req_input->headers_len;i++){
+            curl_slist_append(header_list, req_input->headers[i].header);
+        }
+    }
+    // struct curl_slist *header_list = curl_slist_append(NULL, "Content-Type: text/html");
     if (curl)
     {
         long response_code;
@@ -90,9 +100,12 @@ response_data send_raw_request(char *url, bool secure, char *raw_req, int debug)
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 0);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "cgo benchmark tool");
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req_input->body); 
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req_input->method); 
+
 
         // from response
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, response_writer);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, &header);
@@ -120,6 +133,7 @@ response_data send_raw_request(char *url, bool secure, char *raw_req, int debug)
             }
             response_code = -1;
         }
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
         res = curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME_T, &connect);
         if (CURLE_OK != res)
         {

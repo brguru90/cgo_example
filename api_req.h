@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-
 #include <pthread.h>
 #include <time.h>
 
@@ -22,11 +21,21 @@
 #include <stdbool.h>
 #endif
 
-
 #include <curl/curl.h>
 
+typedef struct Headers
+{
+    char *header;
+} headers_type;
 
-
+typedef struct SingleRequestInput
+{
+    char *url;
+    char *method;
+    headers_type *headers;
+    int headers_len;
+    char *body;
+} request_input;
 
 typedef struct ResponseData
 {
@@ -40,4 +49,4 @@ void run_bulk_api_request(char *s);
 void *goCallback_wrap(void *vargp);
 extern void goCallback(int myid);
 
-response_data send_raw_request(char *url, bool secure, char *raw_req, int debug);
+response_data send_raw_request(char *url, bool secure, request_input *req_input, int debug);
