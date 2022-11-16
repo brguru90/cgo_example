@@ -12,10 +12,13 @@ package main
 */
 import "C"
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"unsafe"
 )
 
@@ -45,15 +48,61 @@ func check_error(err error) {
 	}
 }
 
-func call_api() {
-	url := "http://localhost:8000/api/hello/1?query=text"
-	// url := "http://guruinfo.epizy.com/edu.php"
-	// url:="https://jsonplaceholder.typicode.com/posts"
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte("some string")))
-	req.Header.Add("some header", "its value")
-	req.Header.Add("some header2", "its value2")
+// func headerStringToHttp(h string,req *http.Request) {
+// 	reader := bufio.NewReader(strings.NewReader(h))
 
+// 	logReq, err := http.ReadResponse(reader,req)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	fmt.Println(logReq)
+// 	// log.Printf("\n%s\n", h)
+// 	// reader := bufio.NewReader(strings.NewReader(h + "\r\n"))
+// 	// tp := textproto.NewReader(reader)
+
+// 	// mimeHeader, err := tp.ReadMIMEHeader()
+// 	// check_error(err)
+
+// 	// // http.Header and textproto.MIMEHeader are both just a map[string][]string
+// 	// httpHeader := http.Header(mimeHeader)
+// 	// log.Println(httpHeader)
+// }
+
+func parseHttpResponse(header string, _body string, req *http.Request) (*http.Response, error) {
+	skip_string := "Transfer-Encoding: chunked\r\n"
+	pos := strings.Index(header, skip_string)
+	if pos >= 0 {
+		pos_end := pos + len(skip_string)
+		header = header[0:pos] + header[pos_end:]
+	}
+	r := header + _body
+	body := bytes.NewBuffer([]byte(r))
+	prefix := make([]byte, 7)
+	n, err := io.ReadFull(body, prefix)
+	if err != nil {
+		panic("handler err")
+	}
+	// fmt.Println(n, err, string(prefix))
+	if string(prefix[:n]) == "HTTP/2 " {
+		// fix HTTP/2 proto
+		return http.ReadResponse(bufio.NewReader(io.MultiReader(bytes.NewBufferString("HTTP/2.0 "), body)), req)
+	} else {
+		// other proto
+		// return http.ReadResponse(bufio.NewReader(bytes.NewBuffer([]byte(r))), req)
+		return http.ReadResponse(bufio.NewReader(io.MultiReader(bytes.NewBuffer(prefix[:n]), body)), req)
+	}
+}
+
+func call_api() {
+	// url := "http://localhost:8000/api/hello/1?query=text"
+	url := "http://guruinfo.epizy.com/edu.php"
+	// url:="https://jsonplaceholder.typicode.com/posts"
+	// url:="https://google.com/"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte("some string")))
+	req.Header.Add("some-header", "its value")
+	req.Header.Add("some-header2", "its value2")
 	check_error(err)
+
 	// s_port := req.URL.Port()
 	// if s_port == "" {
 	// 	if strings.HasPrefix(req.URL.String(), "http://") {
@@ -90,12 +139,16 @@ func call_api() {
 		method:      C.CString(req.Method),
 		headers:     (*C.struct_Headers)(c_headers),
 		headers_len: C.int(len(req.Header)),
-		body: C.CString(string(body)),
+		body:        C.CString(string(body)),
 	}
 
 	var response_data C.struct_ResponseData
-	C.send_raw_request(c_url, req.URL.Scheme == "https", &(request_input[0]),&response_data, 1)
-	fmt.Println(response_data.status_code)
+
+	C.send_raw_request(c_url, req.URL.Scheme == "https", &(request_input[0]), &response_data, 0)
+	fmt.Println(int(response_data.status_code))
+	resp, err := parseHttpResponse(C.GoString(response_data.response_header), C.GoString(response_data.response_body), nil)
+	body2, err := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(body2), err)
 }
 
 func main() {
