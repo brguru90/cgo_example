@@ -18,6 +18,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -95,12 +96,12 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func call_api() {
-	total_requests:=5
+	total_requests:=50
 	url := "http://localhost:8000/api/hello/1?query=text"
 	// url := "http://guruinfo.epizy.com/edu.php"
 	// url:="https://jsonplaceholder.typicode.com/posts"
 	// url:="https://google.com/"
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte("some string")))
+	req, err := http.NewRequest("GET", url, bytes.NewBuffer([]byte("some string")))
 	req.Header.Add("some-header", "its value")
 	req.Header.Add("some-header2", "its value2")
 	check_error(err)
@@ -154,11 +155,12 @@ func call_api() {
 
 	bulk_response_data := make([]C.struct_ResponseData, total_requests)
 
-	C.send_request_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), 1)
+	C.send_request_in_parallel(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()),0)
+	// C.send_request_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()),C.struct_ProcessData{full_index:true},1)
 
-	for i = 0; i < total_requests; i++ {
-		fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))
-	}
+	// for i = 0; i < total_requests; i++ {
+	// 	fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))
+	// }
 
 	// fmt.Println(int(response_data.status_code))
 

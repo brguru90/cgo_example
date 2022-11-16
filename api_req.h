@@ -6,16 +6,12 @@
 
 #include <pthread.h>
 #include <time.h>
-
-#include <netinet/tcp.h>
-#include <sys/socket.h>
+#include <math.h>
+#include <sys/mman.h>
 #include <sys/types.h>
-#include <netinet/in.h>
-#include <netdb.h>
-
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <stdbool.h>
+#include <sys/shm.h>
+#include <sys/ipc.h>
+#include <sys/wait.h>
 
 #ifndef __cplusplus
 #include <stdbool.h>
@@ -68,9 +64,18 @@ struct memory
     size_t size;
 };
 
+typedef struct ProcessData
+{
+    int start_index;
+    int end_index;
+    pid_t pid;
+    bool full_index;
+} process_data;
+
 void run_bulk_api_request(char *s);
 void *goCallback_wrap(void *vargp);
 extern void goCallback(int myid);
 
-void send_request_concurrently(request_input *req_inputs, response_data *response_ref,int total_requests, int debug);
+void send_request_in_parallel(request_input *req_inputs, response_data *response_ref, int total_requests, int num_cpu, int debug);
+void send_request_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int num_cpu,process_data proc_data, int debug);
 void send_raw_request(request_input *req_input, response_data *response_ref, int debug);

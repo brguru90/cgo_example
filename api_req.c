@@ -74,13 +74,22 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
 {
     response_data res_data;
     res_data.status_code = -2;
-    if (debug > 0)
+
+    switch (debug)
     {
-        printf("%s\n", req_input->url);
+    case 2:
         printf("header count=%d\n\n", req_input->headers_len);
         printf("%s\n\n", req_input->headers[0].header);
         printf("body=%s\n\n", req_input->body);
+    case 1:
+        printf("debug_level%d\n", debug);
+        printf("%s\n", req_input->url);
+        break;
+
+    default:
+        break;
     }
+
     CURL *curl;
     CURLcode res;
     curl_global_init(CURL_GLOBAL_ALL);
@@ -100,7 +109,7 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
         curl_off_t start = -1, connect = -1, total = -1;
         struct memory body = {0}, header = {0};
         // to request
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, (long)debug);
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, debug > 1 ? 1L : 0);
         curl_easy_setopt(curl, CURLOPT_URL, req_input->url);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 0);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -154,7 +163,7 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
         {
             total = -1;
         }
-        if (debug > 0)
+        if (debug > 1)
         {
             printf("status_code=%ld\n", response_code);
             printf("connect=%lf,ttfb=%lf,total=%lf\n", connect / 1e6, start / 1e6, total / 1e6);
@@ -177,31 +186,128 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
 void *send_raw_request_wrap_for_thread(void *data)
 {
     thread_data *td = (thread_data *)data;
-    send_raw_request(td->req_res.req_inputs_ptr,td->req_res.response_ref_ptr,*td->req_res.debug_flag);
+    send_raw_request(td->req_res.req_inputs_ptr, td->req_res.response_ref_ptr, *td->req_res.debug_flag);
 }
 
-void send_request_concurrently(request_input *req_inputs, response_data *response_ref,int total_requests, int debug)
+void send_request_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int num_cpu, process_data proc_data, int debug)
 {
+    // sleep(proc_data.start_index);
 
-    int i;
-    pthread_t *threads = malloc(sizeof(pthread_t) * total_requests);
-    thread_data *threads_data = malloc(sizeof(thread_data) * total_requests);
+    // return 1;
 
-    for (i = 0; i < total_requests; i++)
+    // response_ref[0].status_code=-2;
+
+    int i, j;
+    int start_index = proc_data.start_index;
+    int end_index = proc_data.end_index;
+    int thread_size = (end_index - start_index);
+    // printf("thread_size=%d\n",thread_size);
+    if (proc_data.full_index == true)
     {
-        threads_data[i].req_res.req_inputs_ptr = &req_inputs[i];
-        threads_data[i].req_res.response_ref_ptr = &response_ref[i];
-        threads_data[i].req_res.debug_flag = &debug;
+        start_index = 0;
+        end_index = total_requests - 1;
+        thread_size = total_requests;
+    }
+    // printf("start_index=%d,end_index=%d\n",start_index,end_index);
+    // printf("thread_size=%d\n", thread_size);
+    pthread_t *threads = malloc(sizeof(pthread_t) * thread_size);
+    thread_data *threads_data = malloc(sizeof(thread_data) * thread_size);
+
+    j = 0;
+    for (i = start_index; i <= end_index; i++)
+    {
+        threads_data[j].req_res.req_inputs_ptr = &req_inputs[i];
+        threads_data[j].req_res.response_ref_ptr = &response_ref[i];
+        threads_data[j].req_res.debug_flag = &debug;
         threads_data->thread_id = i;
+        j++;
     }
 
-    for (i = 0; i < total_requests; i++)
+    for (i = 0; i <= thread_size; i++)
     {
         pthread_create(&threads[i], NULL, send_raw_request_wrap_for_thread, (void *)&threads_data[i]);
     }
-
-    for (i = 0; i < total_requests; i++)
+    for (i = 0; i <= thread_size; i++)
     {
         pthread_join(threads[i], NULL);
     }
+    free(threads);
+    free(threads_data);
+    // printf("thread finish\n");
+    // for (i = start_index; i <= end_index; i++)
+    // {
+    //     printf("s=%d\n", response_ref[i].status_code);
+    // }
+}
+
+// response_data *response_ref_shared[100];
+// int global_i = -1;
+void send_request_in_parallel(request_input *req_inputs, response_data *response_ref, int total_requests, int num_cpu, int debug)
+{
+    // global_i++;
+    // response_ref_shared[global_i]= mmap(NULL, sizeof(response_data) * total_requests, PROT_READ | PROT_WRITE, MAP_SHARED, -1, 0);
+    // response_ref_shared[global_i] = malloc(sizeof(response_data) * total_requests);
+
+    int shmid = shmget(getpid(), sizeof(response_data) * total_requests, 0666 | IPC_CREAT| IPC_EXCL);
+    if (shmid < 0)
+    {
+        perror("err");
+    }
+    response_data *response_ref_shared = (response_data *)shmat(shmid,(void*)0,0);
+
+    int num_of_process = total_requests >= num_cpu ? num_cpu : total_requests;
+    int num_of_thread_per_process = floor((float)total_requests / num_of_process);
+    int left_out_thread = total_requests % num_of_process;
+
+    printf("total_requests=%d,num_cpu=%d,num_of_process=%d,num_of_thread_per_process=%d,left_out_thread=%d\n", total_requests, num_cpu, num_of_process, num_of_thread_per_process, left_out_thread);
+
+    process_data proc_data[left_out_thread == 0 ? num_of_process : num_of_process + 1];
+
+    for (int p = 0; p < num_of_process; p++)
+    {
+        proc_data[p].start_index = p * num_of_thread_per_process;
+        proc_data[p].end_index = (proc_data[p].start_index + num_of_thread_per_process) - 1;
+        proc_data[p].full_index = false;
+    }
+    if (left_out_thread > 0)
+    {
+        proc_data[num_of_process].start_index = num_of_process * num_of_thread_per_process;
+        proc_data[num_of_process].end_index = (proc_data[num_of_process].start_index + left_out_thread) - 1;
+        proc_data[num_of_process].full_index = false;
+    }
+
+    for (int p = 0; p < (left_out_thread == 0 ? num_of_process : num_of_process + 1); p++)
+    {
+        int temp_pid;
+        if ((proc_data[p].pid = fork()) == 0)
+        {
+            if (proc_data[p].pid == -1)
+            {
+                printf("failed to create process\n");
+                exit(1);
+            }
+            // printf("%d-%d\n", getpid(), proc_data[p].pid);
+            send_request_concurrently(req_inputs, response_ref, total_requests, num_cpu, proc_data[p], debug);
+            for (int i = proc_data[p].start_index; i <= proc_data[p].end_index; i++)
+            {
+                // *(response_ref_shared + i) = response_ref[i];
+                printf("%d\n",response_ref[i].status_code);
+            }
+            exit(0);
+        }
+        // printf("%d)start_index=%d,end_index=%d\n", p, proc_data[p].start_index, proc_data[p].end_index);
+    }
+
+    for (int p = 0; p < (left_out_thread == 0 ? num_of_process : num_of_process + 1); p++)
+    {
+        wait(NULL);
+    }
+
+    for (int i = 0; i < total_requests; i++)
+    {
+        printf("%d\n", (response_ref_shared + i)->status_code);
+        // response_ref[i]=*(response_ref_shared + i);
+    }
+    shmdt(response_ref_shared);
+    shmctl(shmid,IPC_RMID,0);
 }
