@@ -216,6 +216,10 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
         res_data.connect_time_microsec = connect;
         res_data.time_at_first_byte_microsec = start;
         res_data.total_time_microsec = total;
+        res_data.connected_at_microsec=res_data.before_connect_time_microsec+connect;
+        res_data.first_byte_at_microsec=res_data.before_connect_time_microsec+start;
+        res_data.finish_at_microsec=res_data.before_connect_time_microsec+total;
+
         res_data.response_header = header.data;
         res_data.response_body = body.data;
 
