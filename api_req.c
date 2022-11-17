@@ -8,6 +8,45 @@
 // https://stackoverflow.com/questions/62387069/golang-parse-raw-http-2-response
 // https://curl.se/libcurl/c/sendrecv.html
 
+#ifdef _WIN32
+#include <Windows.h>
+struct timezone
+{
+    int tz_minuteswest;
+    int tz_dsttime;
+};
+
+int gettimeofday(struct timeval *tv, struct timezone *tz)
+{
+    if (tv)
+    {
+        FILETIME filetime; /* 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 00:00 UTC */
+        ULARGE_INTEGER x;
+        ULONGLONG usec;
+        static const ULONGLONG epoch_offset_us = 11644473600000000ULL; /* microseconds betweeen Jan 1,1601 and Jan 1,1970 */
+
+#if _WIN32_WINNT >= _WIN32_WINNT_WIN8
+        GetSystemTimePreciseAsFileTime(&filetime);
+#else
+        GetSystemTimeAsFileTime(&filetime);
+#endif
+        x.LowPart = filetime.dwLowDateTime;
+        x.HighPart = filetime.dwHighDateTime;
+        usec = x.QuadPart / 10 - epoch_offset_us;
+        tv->tv_sec = (time_t)(usec / 1000000ULL);
+        tv->tv_usec = (long)(usec % 1000000ULL);
+    }
+    if (tz)
+    {
+        TIME_ZONE_INFORMATION timezone;
+        GetTimeZoneInformation(&timezone);
+        tz->tz_minuteswest = timezone.Bias;
+        tz->tz_dsttime = 0;
+    }
+    return 0;
+}
+#endif
+
 #define NUM_THREAD 5
 
 void *goCallback_wrap(void *vargp)
@@ -109,7 +148,7 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
         curl_off_t start = -1, connect = -1, total = -1;
         struct memory body = {0}, header = {0};
         // to request
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, debug > 1 ? 1L : 0);
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, debug > 2 ? 1L : 0);
         curl_easy_setopt(curl, CURLOPT_URL, req_input->url);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 0);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -166,7 +205,10 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
         if (debug > 1)
         {
             printf("status_code=%ld\n", response_code);
-            printf("connect=%lf,ttfb=%lf,total=%lf\n", connect / 1e6, start / 1e6, total / 1e6);
+            printf("before_connect_time=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf\n",res_data.before_connect_time, connect / 1e6, start / 1e6, total / 1e6);
+        }
+        if (debug > 2)
+        {
             printf("%s\n%s\n", header.data, body.data);
         }
 
@@ -183,12 +225,12 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
     *response_ref = res_data;
 }
 
-
 void *loop_on_the_thread(void *data)
 {
     thread_data *td = (thread_data *)data;
-    for(int i=td->th_pool_data.start_index;i<=td->th_pool_data.end_index;i++){
-        send_raw_request(&(td->req_inputs_ptr[i]),&(td->response_ref_ptr[i]),td->debug_flag);
+    for (int i = td->th_pool_data.start_index; i <= td->th_pool_data.end_index; i++)
+    {
+        send_raw_request(&(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
     }
 }
 
