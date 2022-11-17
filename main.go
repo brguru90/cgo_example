@@ -77,7 +77,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func call_api() {
-	total_requests:=50000
+	total_requests:=100000
 	url := "http://localhost:8000/api/hello/1?query=text"
 	// url := "http://guruinfo.epizy.com/edu.php"
 	// url:="https://jsonplaceholder.typicode.com/posts"
@@ -119,7 +119,7 @@ func call_api() {
 
 	bulk_response_data := make([]C.struct_ResponseData, total_requests)
 	ram_size_in_GB:=float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE))/(1024*1024)
-	nor_of_thread:=math.Ceil(ram_size_in_GB/50)
+	nor_of_thread:=math.Ceil(ram_size_in_GB/70)
 	fmt.Println("Nor of threads",nor_of_thread);
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(nor_of_thread),0)
 

@@ -222,8 +222,8 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
 
     for (int i = 0; i < thread_size; i++)
     {
-        threads_data[i].req_inputs_ptr = &req_inputs[i];
-        threads_data[i].response_ref_ptr = &response_ref[i];
+        threads_data[i].req_inputs_ptr = req_inputs;
+        threads_data[i].response_ref_ptr = response_ref;
         threads_data[i].debug_flag = debug;
         threads_data[i].thread_id = i;
         threads_data[i].th_pool_data = proc_data[i];
