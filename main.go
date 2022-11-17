@@ -105,23 +105,8 @@ func call_api() {
 	req.Header.Add("some-header", "its value")
 	req.Header.Add("some-header2", "its value2")
 	check_error(err)
-
-	// s_port := req.URL.Port()
-	// if s_port == "" {
-	// 	if strings.HasPrefix(req.URL.String(), "http://") {
-	// 		s_port = "80"
-	// 	} else if strings.HasPrefix(req.URL.String(), "https://") {
-	// 		s_port = "443"
-	// 	}
-	// }
 	c_url := C.CString(url)
 	defer C.free(unsafe.Pointer(c_url))
-
-	// fmt.Println("-------",C.size_t(2) * C.sizeof_struct_SingleRequestInput)
-
-	// c_request_input := C.malloc(C.size_t(5) * C.sizeof_struct_SingleRequestInput)
-	// defer C.free(unsafe.Pointer(c_request_input))
-	// request_input := (*[1<<30 - 1]C.struct_SingleRequestInput)(c_request_input)
 
 	request_input := make([]C.struct_SingleRequestInput, total_requests)
 
@@ -151,16 +136,15 @@ func call_api() {
 		}
 	}
 
-	// var response_data C.struct_ResponseData
-
 	bulk_response_data := make([]C.struct_ResponseData, total_requests)
 
-	C.send_request_in_parallel(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()),0)
-	// C.send_request_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()),C.struct_ProcessData{full_index:true},1)
+	// C.send_request_in_parallel(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()),0)
+	C.send_request_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()),C.struct_ProcessData{full_index:true},0)
 
-	// for i = 0; i < total_requests; i++ {
-	// 	fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))
-	// }
+	for i = 0; i < total_requests; i++ {
+		// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
+		fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))
+	}
 
 	// fmt.Println(int(response_data.status_code))
 

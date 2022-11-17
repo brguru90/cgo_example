@@ -49,13 +49,14 @@ typedef struct RequestResponse
 {
     request_input *req_inputs_ptr;
     response_data *response_ref_ptr;
-    int *debug_flag;
+    
 } request_response;
 
 typedef struct ThreadData
 {
     request_response req_res;
     int thread_id;
+    int debug_flag;
 } thread_data;
 
 struct memory
@@ -75,6 +76,8 @@ typedef struct ProcessData
 void run_bulk_api_request(char *s);
 void *goCallback_wrap(void *vargp);
 extern void goCallback(int myid);
+
+
 
 void send_request_in_parallel(request_input *req_inputs, response_data *response_ref, int total_requests, int num_cpu, int debug);
 void send_request_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int num_cpu,process_data proc_data, int debug);
