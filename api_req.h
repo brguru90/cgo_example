@@ -38,7 +38,7 @@ typedef struct ResponseData
     char *response_header;
     char *response_body;
     // time_t before_connect_time; //long int
-    long long before_connect_time;
+    long long before_connect_time_microsec;
     long connect_time_microsec;
     long time_at_first_byte_microsec;
     long total_time_microsec;

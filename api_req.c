@@ -89,7 +89,7 @@ long long get_current_time()
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    return (((long long)tv.tv_sec) * 1000) + (tv.tv_usec / 1000);
+    return (((long long)tv.tv_sec) * 1e6) + (tv.tv_usec);
 }
 
 static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp)
@@ -174,7 +174,7 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
         // chunked, see?
         // UA
 
-        res_data.before_connect_time = get_current_time();
+        res_data.before_connect_time_microsec = get_current_time();
         res = curl_easy_perform(curl);
         /* Check for errors */
         if (res != CURLE_OK)
@@ -205,7 +205,7 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
         if (debug > 1)
         {
             printf("status_code=%ld\n", response_code);
-            printf("before_connect_time=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf\n",res_data.before_connect_time, connect / 1e6, start / 1e6, total / 1e6);
+            printf("before_connect_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf\n",res_data.before_connect_time_microsec, connect / 1e6, start / 1e6, total / 1e6);
         }
         if (debug > 2)
         {
