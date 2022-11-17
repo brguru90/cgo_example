@@ -183,121 +183,65 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
     *response_ref = res_data;
 }
 
-void *send_raw_request_wrap_for_thread(void *data)
+
+void *loop_on_the_thread(void *data)
 {
     thread_data *td = (thread_data *)data;
-    send_raw_request(td->req_res.req_inputs_ptr, td->req_res.response_ref_ptr, td->debug_flag);
+    for(int i=td->th_pool_data.start_index;i<=td->th_pool_data.end_index;i++){
+        send_raw_request(&(td->req_inputs_ptr[i]),&(td->response_ref_ptr[i]),td->debug_flag);
+    }
 }
 
-void send_request_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int num_cpu, process_data proc_data, int debug)
+void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
 {
 
-    int i, j;
-    int start_index = proc_data.start_index;
-    int end_index = proc_data.end_index;
-    int thread_size = (end_index - start_index) + 1;
-    if (proc_data.full_index == true)
+    int num_of_threads = total_requests >= total_threads ? total_threads : total_requests;
+    int max_work_on_thread = floor((float)total_requests / num_of_threads);
+    int left_out_work = total_requests % num_of_threads;
+
+    printf("total_requests=%d,total_threads=%d,num_of_threads=%d,max_work_on_thread=%d,left_out_work=%d\n", total_requests, total_threads, num_of_threads, max_work_on_thread, left_out_work);
+
+    thread_pool_data proc_data[left_out_work == 0 ? num_of_threads : num_of_threads + 1];
+
+    for (int p = 0; p < num_of_threads; p++)
     {
-        start_index = 0;
-        end_index = total_requests - 1;
-        thread_size = total_requests;
+        proc_data[p].start_index = p * max_work_on_thread;
+        proc_data[p].end_index = (proc_data[p].start_index + max_work_on_thread) - 1;
+        proc_data[p].full_index = false;
     }
-    // printf("thread_size=%d\n",thread_size);
-    // printf("start_index=%d,end_index=%d\n",start_index,end_index);
+    if (left_out_work > 0)
+    {
+        proc_data[num_of_threads].start_index = num_of_threads * max_work_on_thread;
+        proc_data[num_of_threads].end_index = (proc_data[num_of_threads].start_index + left_out_work) - 1;
+        proc_data[num_of_threads].full_index = false;
+    }
+
+    int thread_size = (left_out_work == 0 ? num_of_threads : num_of_threads + 1);
     pthread_t *threads = malloc(sizeof(pthread_t) * thread_size);
     thread_data *threads_data = malloc(sizeof(thread_data) * thread_size);
 
-    for (j = 0, i = start_index; i <= end_index; j++, i++)
+    for (int i = 0; i < thread_size; i++)
     {
-        threads_data[j].req_res.req_inputs_ptr = &req_inputs[i];
-        threads_data[j].req_res.response_ref_ptr = &response_ref[i];
-        threads_data[j].debug_flag = debug;
-        threads_data[j].thread_id = i;
+        threads_data[i].req_inputs_ptr = &req_inputs[i];
+        threads_data[i].response_ref_ptr = &response_ref[i];
+        threads_data[i].debug_flag = debug;
+        threads_data[i].thread_id = i;
+        threads_data[i].th_pool_data = proc_data[i];
     }
 
-    for (i = 0; i < thread_size; i++)
+    for (int p = 0; p < thread_size; p++)
     {
-        if (pthread_create(&threads[i], NULL, send_raw_request_wrap_for_thread, (void *)&threads_data[i]) != 0)
+        if (pthread_create(&threads[p], NULL, loop_on_the_thread, (void *)&threads_data[p]) != 0)
         {
             perror("pthread_create() error");
             exit(1);
         }
     }
-    for (i = 0; i < thread_size; i++)
+
+    for (int i = 0; i < thread_size; i++)
     {
         pthread_join(threads[i], NULL);
     }
     free(threads);
     free(threads_data);
-    // // for (i = start_index; i <= end_index; i++)
-    // // {
-    // //     printf("s=%d\n", response_ref[i].status_code);
-    // // }
-}
-
-// !!!warning, the char* of (response_data)struct in shared memory is not working
-// https://stackoverflow.com/questions/49217802/how-to-handle-structs-in-shared-memory
-void send_request_in_parallel(request_input *req_inputs, response_data *response_ref, int total_requests, int num_cpu, int debug)
-{
-    int shmid = shmget(IPC_PRIVATE, sizeof(response_data) * total_requests, 0666 | IPC_CREAT | IPC_EXCL);
-    if (shmid < 0)
-    {
-        perror("err");
-    }
-
-    int num_of_process = total_requests >= num_cpu ? num_cpu : total_requests;
-    int num_of_thread_per_process = floor((float)total_requests / num_of_process);
-    int left_out_thread = total_requests % num_of_process;
-
-    printf("total_requests=%d,num_cpu=%d,num_of_process=%d,num_of_thread_per_process=%d,left_out_thread=%d\n", total_requests, num_cpu, num_of_process, num_of_thread_per_process, left_out_thread);
-
-    process_data proc_data[left_out_thread == 0 ? num_of_process : num_of_process + 1];
-
-    for (int p = 0; p < num_of_process; p++)
-    {
-        proc_data[p].start_index = p * num_of_thread_per_process;
-        proc_data[p].end_index = (proc_data[p].start_index + num_of_thread_per_process) - 1;
-        proc_data[p].full_index = false;
-    }
-    if (left_out_thread > 0)
-    {
-        proc_data[num_of_process].start_index = num_of_process * num_of_thread_per_process;
-        proc_data[num_of_process].end_index = (proc_data[num_of_process].start_index + left_out_thread) - 1;
-        proc_data[num_of_process].full_index = false;
-    }
-
-    for (int p = 0; p < (left_out_thread == 0 ? num_of_process : num_of_process + 1); p++)
-    {
-        int temp_pid;
-        if ((proc_data[p].pid = fork()) == 0)
-        {
-            if (proc_data[p].pid == -1)
-            {
-                printf("failed to create process\n");
-                exit(1);
-            }
-            response_data *response_ref_local = (response_data *)shmat(shmid, (void *)0, 0);
-            send_request_concurrently(req_inputs, response_ref_local, total_requests, num_cpu, proc_data[p], debug);
-            shmdt(response_ref_local);
-            exit(0);
-        }
-    }
-
-    for (int p = 0; p < (left_out_thread == 0 ? num_of_process : num_of_process + 1); p++)
-    {
-        wait(NULL);
-    }
-
-    response_data *response_ref_shared = (response_data *)shmat(shmid, (void *)0, 0);
-    // response_ref=response_ref_shared;
-    for (int i = 0; i < total_requests; i++)
-    {
-        printf("%d\n", response_ref_shared[i].status_code);
-        // issue here
-        // https://stackoverflow.com/questions/49217802/how-to-handle-structs-in-shared-memory
-        printf("%s\n", response_ref_shared[i].response_body);
-        // response_ref[i]=response_ref_shared[i];
-    }
-    shmdt(response_ref_shared);
-    shmctl(shmid, IPC_RMID, 0);
 }
