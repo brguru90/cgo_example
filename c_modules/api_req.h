@@ -85,11 +85,20 @@ typedef struct ThreadPoolData
     char *uuid;
     bool full_index;
 } thread_pool_data;
+typedef struct ThreadData
+{
+    request_input *req_inputs_ptr;
+    response_data *response_ref_ptr;
+    int thread_id;
+    int debug_flag;
+    thread_pool_data th_pool_data;
+} thread_data;
 
 struct memory
 {
     char *data;
     size_t size;
 };
+
 
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug);

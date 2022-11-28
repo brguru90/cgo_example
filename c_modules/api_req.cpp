@@ -1,4 +1,5 @@
 #include "api_req.h"
+#include "api_req.hpp"
 
 // git clone https://github.com/curl/curl.git
 // https://gist.github.com/nolim1t/126991/ae3a7d36470d2a81190339fbc78821076a4059f7
@@ -47,44 +48,6 @@ int gettimeofday(struct timeval *tv, struct timezone *tz)
 }
 #endif
 
-#define NUM_THREAD 5
-
-void *goCallback_wrap(void *vargp)
-{
-    int *myid = (int *)vargp;
-    printf("tid=%d\n", *myid);
-    // goCallback(*myid);
-    pthread_exit(NULL);
-}
-
-void run_bulk_api_request(char *s)
-{
-    printf("%s\n", s);
-
-    int i, nor_of_thread;
-    // pthread_t threads[NUM_THREAD];
-    printf("Enter number of thread\n");
-    scanf("%d", &nor_of_thread);
-    printf("Entered %d\n", nor_of_thread);
-    pthread_t *threads = malloc(sizeof(pthread_t) * nor_of_thread);
-    pthread_t tid;
-
-    for (i = 0; i < nor_of_thread; i++)
-    {
-        pthread_create(&threads[i], NULL, goCallback_wrap, (void *)&threads[i]);
-    }
-
-    for (i = 0; i < nor_of_thread; i++)
-    {
-        pthread_join(threads[i], NULL);
-    }
-
-    // printf("Main thread exiting...\n");
-    // pthread_exit(NULL);
-
-    goCallback(-1);
-}
-
 long long get_current_time()
 {
     struct timeval tv;
@@ -97,7 +60,7 @@ static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp
     size_t realsize = size * nmemb;
     struct memory *mem = (struct memory *)userp;
 
-    char *ptr = realloc(mem->data, mem->size + realsize + 1);
+    char *ptr = (char *)realloc(mem->data, mem->size + realsize + 1);
     if (ptr == NULL)
         return 0; /* out of memory! */
 
@@ -349,13 +312,13 @@ void send_raw_request(request_input *req_input, response_data *response_ref, int
     *response_ref = res_data;
 }
 
-uv_loop_t *loop;
-CURLM *curl_handle;
-uv_timer_t timeout;
+// uv_loop_t *loop;
+// CURLM *curl_handle;
+// uv_timer_t timeout;
 
-curl_handlers_t *curl_handlers;
+// curl_handlers_t *curl_handlers;
 
-static curl_context_t *create_curl_context(curl_socket_t sockfd)
+static curl_context_t *create_curl_context(curl_handlers_t curl_handlers, curl_socket_t sockfd)
 {
     curl_context_t *context;
 
@@ -363,7 +326,7 @@ static curl_context_t *create_curl_context(curl_socket_t sockfd)
 
     context->sockfd = sockfd;
 
-    uv_poll_init_socket(loop, &context->poll_handle, sockfd);
+    uv_poll_init_socket(curl_handlers.loop, &context->poll_handle, sockfd);
     context->poll_handle.data = context;
 
     return context;
@@ -380,7 +343,7 @@ static void destroy_curl_context(curl_context_t *context)
     uv_close((uv_handle_t *)&context->poll_handle, curl_close_cb);
 }
 
-static void add_request_to_event_loop(request_input *req_input, response_data *response_ref, int debug)
+static void add_request_to_event_loop(curl_handlers_t curl_handlers, request_input *req_input, response_data *response_ref, int debug)
 {
     response_ref->status_code = -2;
     response_ref->debug = debug;
@@ -429,7 +392,7 @@ static void add_request_to_event_loop(request_input *req_input, response_data *r
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req_input->method);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, req_input->time_out_in_sec);
 
-    curl_multi_add_handle(curl_handle, curl);
+    curl_multi_add_handle(curl_handlers.curl_handle, curl);
     response_ref->before_connect_time_microsec = get_current_time();
     if (debug > 1)
     {
@@ -437,7 +400,7 @@ static void add_request_to_event_loop(request_input *req_input, response_data *r
     }
 }
 
-static void on_request_complete(CURLMcode res)
+static void on_request_complete(curl_handlers_t curl_handlers, CURLMcode res)
 {
     char *done_url;
     CURLMsg *message;
@@ -445,11 +408,12 @@ static void on_request_complete(CURLMcode res)
     CURL *easy_handle;
     response_data *response_ref;
 
-    while ((message = curl_multi_info_read(curl_handle, &pending)))
+    while ((message = curl_multi_info_read(curl_handlers.curl_handle, &pending)))
     {
         switch (message->msg)
         {
         case CURLMSG_DONE:
+        {
             /* Do not use message data after calling curl_multi_remove_handle() and
                curl_easy_cleanup(). As per curl_multi_info_read() docs:
                "WARNING: The data the returned pointer points to will not survive
@@ -459,11 +423,11 @@ static void on_request_complete(CURLMcode res)
             curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, &done_url);
             printf("---done_url=%s\n", done_url);
             curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, &response_ref);
-            if (res != CURLE_OK)
-            {
-                response_ref->status_code = -1;
-                response_ref->err_code = res;
-            }
+            // if (res != CURLE_OK)
+            // {
+            //     response_ref->status_code = -1;
+            //     response_ref->err_code = res;
+            // }
             response_ref->after_response_time_microsec = get_current_time();
 
             curl_off_t start = -1, connect = -1, total = -1;
@@ -476,18 +440,19 @@ static void on_request_complete(CURLMcode res)
             printf("%s DONE\n", done_url);
 
             curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->status_code);
-            res = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
-            if (CURLE_OK != res)
+            CURLcode res2;
+            res2 = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
+            if (CURLE_OK != res2)
             {
                 connect = -1;
             }
-            res = curl_easy_getinfo(easy_handle, CURLINFO_STARTTRANSFER_TIME_T, &start);
-            if (CURLE_OK != res)
+            res2 = curl_easy_getinfo(easy_handle, CURLINFO_STARTTRANSFER_TIME_T, &start);
+            if (CURLE_OK != res2)
             {
                 start = -1;
             }
-            res = curl_easy_getinfo(easy_handle, CURLINFO_TOTAL_TIME_T, &total);
-            if (CURLE_OK != res)
+            res2 = curl_easy_getinfo(easy_handle, CURLINFO_TOTAL_TIME_T, &total);
+            if (CURLE_OK != res2)
             {
                 total = -1;
             }
@@ -502,10 +467,11 @@ static void on_request_complete(CURLMcode res)
                 printf("%s\n%s\n", header.data, body.data);
             }
 
-            curl_multi_remove_handle(curl_handle, easy_handle);
+            curl_multi_remove_handle(curl_handlers.curl_handle, easy_handle);
             curl_easy_cleanup(easy_handle);
 
             break;
+        }
 
         default:
             fprintf(stderr, "CURLMSG default\n");
@@ -514,7 +480,7 @@ static void on_request_complete(CURLMcode res)
     }
 }
 
-static void curl_perform(uv_poll_t *req, int status, int events)
+static void curl_perform(curl_handlers_t curl_handlers, uv_poll_t *req, int status, int events)
 {
     int running_handles;
     int flags = 0;
@@ -528,39 +494,75 @@ static void curl_perform(uv_poll_t *req, int status, int events)
 
     context = (curl_context_t *)req->data;
 
-    res = curl_multi_socket_action(curl_handle, context->sockfd, flags,
+    res = curl_multi_socket_action(curl_handlers.curl_handle, context->sockfd, flags,
                                    &running_handles);
-
-    on_request_complete(res);
+    on_request_complete(curl_handlers, res);
 }
 
-static void on_timeout(uv_timer_t *req)
+static void on_timeout(curl_handlers_t curl_handlers, uv_timer_t *req)
 {
     int running_handles;
     CURLMcode res;
-    res = curl_multi_socket_action(curl_handle, CURL_SOCKET_TIMEOUT, 0,
+    res = curl_multi_socket_action(curl_handlers.curl_handle, CURL_SOCKET_TIMEOUT, 0,
                                    &running_handles);
-    on_request_complete(res);
+    on_request_complete(curl_handlers, res);
 }
 
-static int start_timeout(CURLM *multi, long timeout_ms, void *userp)
+// std::function<void(uv_timer_t *req)> get_on_timeout_with_context(curl_handlers_t curl_handlers)
+// {
+//     return [=](uv_timer_t *req) mutable {
+//         on_timeout(curl_handlers, req);
+//     };
+// }
+
+static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeout_ms, void *userp)
 {
     printf("timeout_ms->%ld\n", timeout_ms);
+    // 
+    // struct create_on_timeout_with_context
+    // {
+    //     create_on_timeout_with_context(curl_handlers_t curl_handlers) : ch(curl_handlers) {} // Constructor
+    //     uv_timer_cb operator()(uv_timer_t *req) const { on_timeout(ch,req); }
+
+    // private:
+    //     curl_handlers_t ch;
+    // };
+
+    // create_on_timeout_with_context on_timeout_with_context(curl_handlers);
+
+    // auto on_timeout_with_context = [curl_handlers](uv_timer_t *req) mutable
+    // {
+    //     on_timeout(curl_handlers, req);
+    // };
+
+    struct create_on_timeout_with_context
+    {
+        curl_handlers_t curl_handlers;
+        void operator()(uv_timer_t *req) { on_timeout(curl_handlers, req); }
+    };
+
+    create_on_timeout_with_context on_timeout_with_context;
+    on_timeout_with_context.curl_handlers=curl_handlers;
+
+    // https://www.nextptr.com/tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
+
     if (timeout_ms < 0)
     {
-        uv_timer_stop(&timeout);
+        uv_timer_stop(&curl_handlers.timeout);
     }
     else
     {
         if (timeout_ms == 0)
             timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
                                in a bit */
-        uv_timer_start(&timeout, on_timeout, timeout_ms, 0);
+
+        
+        uv_timer_start(&curl_handlers.timeout, on_timeout_with_context, timeout_ms, 0);
     }
     return 0;
 }
 
-static int handle_socket(CURL *easy, curl_socket_t s, int action, void *userp,
+static int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_t s, int action, void *userp,
                          void *socketp)
 {
     curl_context_t *curl_context;
@@ -571,23 +573,27 @@ static int handle_socket(CURL *easy, curl_socket_t s, int action, void *userp,
     case CURL_POLL_IN:
     case CURL_POLL_OUT:
     case CURL_POLL_INOUT:
-        curl_context = socketp ? (curl_context_t *)socketp : create_curl_context(s);
+        curl_context = socketp ? (curl_context_t *)socketp : create_curl_context(curl_handlers, s);
 
-        curl_multi_assign(curl_handle, s, (void *)curl_context);
+        curl_multi_assign(curl_handlers.curl_handle, s, (void *)curl_context);
 
         if (action != CURL_POLL_IN)
             events |= UV_WRITABLE;
         if (action != CURL_POLL_OUT)
             events |= UV_READABLE;
 
-        uv_poll_start(&curl_context->poll_handle, events, curl_perform);
+        auto curl_perform_with_context = [curl_handlers](uv_poll_t *req, int status, int events)
+        {
+            return curl_perform(curl_handlers, req, status, events);
+        };
+        uv_poll_start(&curl_context->poll_handle, events, curl_perform_with_context);
         break;
     case CURL_POLL_REMOVE:
         if (socketp)
         {
             uv_poll_stop(&((curl_context_t *)socketp)->poll_handle);
             destroy_curl_context((curl_context_t *)socketp);
-            curl_multi_assign(curl_handle, s, NULL);
+            curl_multi_assign(curl_handlers.curl_handle, s, NULL);
         }
         break;
     default:
@@ -601,7 +607,9 @@ void *loop_on_the_thread(void *data)
 {
     thread_data *td = (thread_data *)data;
 
-    loop = uv_default_loop();
+    curl_handlers_t curl_handlers;
+
+    curl_handlers.loop = uv_default_loop();
 
     if (curl_global_init(CURL_GLOBAL_ALL))
     {
@@ -609,19 +617,27 @@ void *loop_on_the_thread(void *data)
         return NULL;
     }
 
-    uv_timer_init(loop, &timeout);
+    uv_timer_init(curl_handlers.loop, &curl_handlers.timeout);
 
-    curl_handle = curl_multi_init();
-    curl_multi_setopt(curl_handle, CURLMOPT_SOCKETFUNCTION, handle_socket);
-    curl_multi_setopt(curl_handle, CURLMOPT_TIMERFUNCTION, start_timeout);
+    curl_handlers.curl_handle = curl_multi_init();
+    auto handle_socket_with_context = [curl_handlers](CURL *easy, curl_socket_t s, int action, void *userp, void *socketp) -> int
+    {
+        return handle_socket(curl_handlers, easy, s, action, userp, socketp);
+    };
+    auto start_timeout_with_context = [curl_handlers](CURLM *multi, long timeout_ms, void *userp) -> int
+    {
+        return start_timeout(curl_handlers, multi, timeout_ms, userp);
+    };
+    curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_SOCKETFUNCTION, handle_socket_with_context);
+    curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_TIMERFUNCTION, start_timeout_with_context);
     for (int i = td->th_pool_data.start_index; i <= td->th_pool_data.end_index; i++)
     {
 
-        add_request_to_event_loop(&(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
+        add_request_to_event_loop(curl_handlers, &(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
         // send_raw_request(&(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
     }
-    uv_run(loop, UV_RUN_DEFAULT);
-    curl_multi_cleanup(curl_handle);
+    uv_run(curl_handlers.loop, UV_RUN_DEFAULT);
+    curl_multi_cleanup(curl_handlers.curl_handle);
 }
 
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
@@ -649,8 +665,8 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     }
 
     int thread_size = (left_out_work == 0 ? num_of_threads : num_of_threads + 1);
-    pthread_t *threads = malloc(sizeof(pthread_t) * thread_size);
-    thread_data *threads_data = malloc(sizeof(thread_data) * thread_size);
+    pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * thread_size);
+    thread_data *threads_data = (thread_data *)malloc(sizeof(thread_data) * thread_size);
 
     for (int i = 0; i < thread_size; i++)
     {
@@ -677,8 +693,3 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     // free(threads);
     // free(threads_data);
 }
-
-
-
-
-
