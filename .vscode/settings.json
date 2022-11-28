@@ -7,6 +7,9 @@
         "random": "c",
         "stdbool.h": "c",
         "easy.h": "c",
-        "curlver.h": "c"
+        "curlver.h": "c",
+        "stdarg.h": "c",
+        "callback.h": "c",
+        "functional": "c"
     }
 }

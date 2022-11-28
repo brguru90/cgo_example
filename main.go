@@ -2,12 +2,14 @@ package main
 
 /*
 #cgo linux pkg-config: libcurl
+#cgo linux pkg-config: libuv
 #cgo darwin LDFLAGS: -lcurl
 #cgo windows LDFLAGS: -lcurl
 #include <stdlib.h>
 #include <string.h>
 #include "api_req.h"
 #cgo CFLAGS: -g -Wall
+#cgo LDFLAGS: -lssl -lcrypto -lpthread -lm
 #cgo LDFLAGS: -L${SRCDIR} api_req.so
 */
 import "C"
@@ -20,6 +22,8 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+
+	// "strconv"
 	"strings"
 	"unsafe"
 )
@@ -41,7 +45,7 @@ func goCallback(myid C.int) {
 func callCAPI(s string) {
 	cs := C.CString(s)
 	defer C.free(unsafe.Pointer(cs))
-	C.run_bulk_api_request(cs)
+	// C.run_bulk_api_request(cs)
 }
 
 func check_error(err error) {
@@ -49,7 +53,6 @@ func check_error(err error) {
 		panic(err)
 	}
 }
-
 
 func parseHttpResponse(header string, _body string, req *http.Request) (*http.Response, error) {
 	skip_string := "Transfer-Encoding: chunked\r\n"
@@ -77,9 +80,10 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func call_api() {
-	total_requests:=2
+	total_requests := 2
 	// url := "http://localhost:8000/api/hello/1?query=text"
-	url := "http://guruinfo.epizy.com/edu.php"
+	url := "http://localhost:8000/api/user/"
+	// url := "http://guruinfo.epizy.com/edu.php"
 	// url:="https://jsonplaceholder.typicode.com/posts"
 	// url:="https://google.com/"
 	req, err := http.NewRequest("GET", url, bytes.NewBuffer([]byte("some string")))
@@ -91,7 +95,7 @@ func call_api() {
 
 	request_input := make([]C.struct_SingleRequestInput, total_requests)
 
-	c_headers := C.malloc(C.size_t(len(req.Header)) * C.sizeof_struct_Headers)
+	c_headers := C.malloc(C.size_t(len(req.Header)+4) * C.sizeof_struct_Headers)
 	defer C.free(unsafe.Pointer(c_headers))
 	headers_data := (*[1<<30 - 1]C.struct_Headers)(c_headers)
 	var i int = 0
@@ -110,18 +114,27 @@ func call_api() {
 	for i = 0; i < total_requests; i++ {
 		request_input[i] = C.struct_SingleRequestInput{
 			url:         C.CString("http://localhost:8000/api/test/"+strconv.Itoa(i)),
+			// url:         C.CString(req.URL.String()),
 			method:      C.CString(req.Method),
 			headers:     (*C.struct_Headers)(c_headers),
 			headers_len: C.int(len(req.Header)),
 			body:        C.CString(string(body)),
+			cookies:     C.CString(""),
 		}
 	}
 
 	bulk_response_data := make([]C.struct_ResponseData, total_requests)
-	ram_size_in_GB:=float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE))/(1024*1024)
-	nor_of_thread:=math.Ceil(ram_size_in_GB/70)
-	fmt.Println("Nor of threads",nor_of_thread);
-	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(nor_of_thread),2)
+	ram_size_in_GB := float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE)) / (1024 * 1024)
+	nor_of_thread := math.Ceil(ram_size_in_GB / 70)
+	fmt.Println("Nor of threads", nor_of_thread)
+	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(nor_of_thread), 2)
+
+
+	for i = 0; i < total_requests; i++ {
+		// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
+		fmt.Println(int(bulk_response_data[i].status_code))
+	}
+
 
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
@@ -143,6 +156,14 @@ func main() {
 	// callCAPI(str1)
 
 	call_api()
+
+	// t1 := time.Now()
+	// time.Sleep(time.Second * 1)
+	// t2 := time.Now()
+	// fmt.Println(t1, t2)
+	// fmt.Println(t2.Sub(t1).Milliseconds(), t2.Sub(t1).Microseconds())
+	// fmt.Println(time.UnixMicro(t2.Sub(t1).Microseconds()))
+	// fmt.Println(time.UnixMicro(1668770468053763).Sub(time.UnixMicro(1668770468053285)).Microseconds())
 
 	// for v:=range gchan{
 	// 	println(v);
