@@ -28,7 +28,7 @@ import (
 	"unsafe"
 )
 
-
+// https://github.com/opensourcedoc/go-c-cpp-mix
 
 func check_error(err error) {
 	if err != nil {
