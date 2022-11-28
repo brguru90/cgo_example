@@ -85,14 +85,6 @@ typedef struct ThreadPoolData
     char *uuid;
     bool full_index;
 } thread_pool_data;
-typedef struct ThreadData
-{
-    request_input *req_inputs_ptr;
-    response_data *response_ref_ptr;
-    int thread_id;
-    int debug_flag;
-    thread_pool_data th_pool_data;
-} thread_data;
 
 struct memory
 {
@@ -100,9 +92,4 @@ struct memory
     size_t size;
 };
 
-void run_bulk_api_request(char *s);
-void *goCallback_wrap(void *vargp);
-extern void goCallback(int myid);
-
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug);
-void send_raw_request(request_input *req_input, response_data *response_ref, int debug);

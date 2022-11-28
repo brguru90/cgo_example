@@ -2,7 +2,7 @@
 extern "C" {
 #endif
 
-void* call_class();
+void call_class();
 
 #ifdef __cplusplus
 }
