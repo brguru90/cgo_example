@@ -366,7 +366,6 @@ static void add_request_to_event_loop(curl_handlers_t curl_handlers, request_inp
         printf("body=>%s\n\n", req_input->body);
     }
 
-
     CURL *curl;
     curl = curl_easy_init();
     struct curl_slist *header_list = NULL;
@@ -549,25 +548,25 @@ static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeo
 
     // https://www.nextptr.com/tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
 
-    auto on_timeout_with_context = new std::function<void(uv_timer_t * req)>([=](uv_timer_t *req)
-                                                                             { 
+    // auto on_timeout_with_context = new std::function<void(uv_timer_t * req)>([=](uv_timer_t *req)
+    //                                                                          {
 
-                                                                                 printf("------------");
-                                                                                //  on_timeout(curl_handlers, req);
-                                                                              });
+    //                                                                              printf("------------");
+    //                                                                             //  on_timeout(curl_handlers, req);
+    //                                                                           });
 
-    if (timeout_ms < 0)
-    {
-        uv_timer_stop(&curl_handlers.timeout);
-    }
-    else
-    {
-        if (timeout_ms == 0)
-            timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
-                               in a bit */
+    // if (timeout_ms < 0)
+    // {
+    //     uv_timer_stop(&curl_handlers.timeout);
+    // }
+    // else
+    // {
+    //     if (timeout_ms == 0)
+    //         timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
+    //                            in a bit */
 
-        uv_timer_start(&curl_handlers.timeout, (uv_timer_cb)on_timeout_with_context, timeout_ms, 0);
-    }
+    //     uv_timer_start(&curl_handlers.timeout, (uv_timer_cb)on_timeout_with_context, timeout_ms, 0);
+    // }
     return 0;
 }
 
@@ -618,6 +617,13 @@ static int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_
     return 0;
 }
 
+typedef struct start_timeout_with_context_Type
+{
+    CURLM *multi;
+    long timeout_ms;
+    void *userp;
+} start_timeout_with_context_type;
+
 void *loop_on_the_thread(void *data)
 {
     thread_data *td = (thread_data *)data;
@@ -641,10 +647,14 @@ void *loop_on_the_thread(void *data)
     };
     auto start_timeout_with_context = [curl_handlers](CURLM *multi, long timeout_ms, void *userp) -> int
     {
-        return start_timeout(curl_handlers, multi, timeout_ms, userp);
+        printf("~~~~~~~~~~");
+        // return start_timeout(curl_handlers, multi, timeout_ms, userp);
+        return 1;
     };
     curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_SOCKETFUNCTION, handle_socket_with_context);
+
     curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_TIMERFUNCTION, start_timeout_with_context);
+    
     for (int i = td->th_pool_data.start_index; i <= td->th_pool_data.end_index; i++)
     {
 
