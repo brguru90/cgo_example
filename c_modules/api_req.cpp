@@ -422,50 +422,50 @@ static void on_request_complete(curl_handlers_t curl_handlers, CURLMcode res)
             easy_handle = message->easy_handle;
             curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, &done_url);
             printf("---done_url=%s\n", done_url);
-            // curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, &response_ref);
-            // // if (res != CURLE_OK)
-            // // {
-            // //     response_ref->status_code = -1;
-            // //     response_ref->err_code = res;
-            // // }
-            // response_ref->after_response_time_microsec = get_current_time();
+            curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, &response_ref);
+            // if (res != CURLE_OK)
+            // {
+            //     response_ref->status_code = -1;
+            //     response_ref->err_code = res;
+            // }
+            response_ref->after_response_time_microsec = get_current_time();
 
-            // curl_off_t start = -1, connect = -1, total = -1;
-            // struct memory body = {0}, header = {0};
-            // // from response
-            // curl_easy_setopt(easy_handle, CURLOPT_WRITEFUNCTION, response_writer);
-            // curl_easy_setopt(easy_handle, CURLOPT_WRITEDATA, (void *)&body);
-            // curl_easy_setopt(easy_handle, CURLOPT_HEADERDATA, &header);
-            // curl_easy_setopt(easy_handle, CURLOPT_HEADERFUNCTION, response_writer);
-            // printf("%s DONE\n", done_url);
+            curl_off_t start = -1, connect = -1, total = -1;
+            struct memory body = {0}, header = {0};
+            // from response
+            curl_easy_setopt(easy_handle, CURLOPT_WRITEFUNCTION, response_writer);
+            curl_easy_setopt(easy_handle, CURLOPT_WRITEDATA, (void *)&body);
+            curl_easy_setopt(easy_handle, CURLOPT_HEADERDATA, &header);
+            curl_easy_setopt(easy_handle, CURLOPT_HEADERFUNCTION, response_writer);
+            printf("%s DONE\n", done_url);
 
-            // curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->status_code);
-            // CURLcode res2;
-            // res2 = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
-            // if (CURLE_OK != res2)
-            // {
-            //     connect = -1;
-            // }
-            // res2 = curl_easy_getinfo(easy_handle, CURLINFO_STARTTRANSFER_TIME_T, &start);
-            // if (CURLE_OK != res2)
-            // {
-            //     start = -1;
-            // }
-            // res2 = curl_easy_getinfo(easy_handle, CURLINFO_TOTAL_TIME_T, &total);
-            // if (CURLE_OK != res2)
-            // {
-            //     total = -1;
-            // }
+            curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->status_code);
+            CURLcode res2;
+            res2 = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
+            if (CURLE_OK != res2)
+            {
+                connect = -1;
+            }
+            res2 = curl_easy_getinfo(easy_handle, CURLINFO_STARTTRANSFER_TIME_T, &start);
+            if (CURLE_OK != res2)
+            {
+                start = -1;
+            }
+            res2 = curl_easy_getinfo(easy_handle, CURLINFO_TOTAL_TIME_T, &total);
+            if (CURLE_OK != res2)
+            {
+                total = -1;
+            }
 
-            // if (response_ref->debug > 2)
-            // {
-            //     printf("status_code=%d\n", response_ref->status_code);
-            //     printf("before_connect_time_microsec=%lld,after_response_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf.total2=%lld\n", response_ref->before_connect_time_microsec, response_ref->after_response_time_microsec, connect / 1e6, start / 1e6, total / 1e6, response_ref->after_response_time_microsec - response_ref->before_connect_time_microsec);
-            // }
-            // if (response_ref->debug > 3)
-            // {
-            //     printf("%s\n%s\n", header.data, body.data);
-            // }
+            if (response_ref->debug > 2)
+            {
+                printf("status_code=%d\n", response_ref->status_code);
+                printf("before_connect_time_microsec=%lld,after_response_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf.total2=%lld\n", response_ref->before_connect_time_microsec, response_ref->after_response_time_microsec, connect / 1e6, start / 1e6, total / 1e6, response_ref->after_response_time_microsec - response_ref->before_connect_time_microsec);
+            }
+            if (response_ref->debug > 3)
+            {
+                printf("%s\n%s\n", header.data, body.data);
+            }
 
             curl_multi_remove_handle(curl_handlers.curl_handle, easy_handle);
             curl_easy_cleanup(easy_handle);
