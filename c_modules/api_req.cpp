@@ -422,50 +422,50 @@ static void on_request_complete(curl_handlers_t curl_handlers, CURLMcode res)
             easy_handle = message->easy_handle;
             curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, &done_url);
             printf("---done_url=%s\n", done_url);
-            curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, &response_ref);
-            // if (res != CURLE_OK)
+            // curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, &response_ref);
+            // // if (res != CURLE_OK)
+            // // {
+            // //     response_ref->status_code = -1;
+            // //     response_ref->err_code = res;
+            // // }
+            // response_ref->after_response_time_microsec = get_current_time();
+
+            // curl_off_t start = -1, connect = -1, total = -1;
+            // struct memory body = {0}, header = {0};
+            // // from response
+            // curl_easy_setopt(easy_handle, CURLOPT_WRITEFUNCTION, response_writer);
+            // curl_easy_setopt(easy_handle, CURLOPT_WRITEDATA, (void *)&body);
+            // curl_easy_setopt(easy_handle, CURLOPT_HEADERDATA, &header);
+            // curl_easy_setopt(easy_handle, CURLOPT_HEADERFUNCTION, response_writer);
+            // printf("%s DONE\n", done_url);
+
+            // curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->status_code);
+            // CURLcode res2;
+            // res2 = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
+            // if (CURLE_OK != res2)
             // {
-            //     response_ref->status_code = -1;
-            //     response_ref->err_code = res;
+            //     connect = -1;
             // }
-            response_ref->after_response_time_microsec = get_current_time();
+            // res2 = curl_easy_getinfo(easy_handle, CURLINFO_STARTTRANSFER_TIME_T, &start);
+            // if (CURLE_OK != res2)
+            // {
+            //     start = -1;
+            // }
+            // res2 = curl_easy_getinfo(easy_handle, CURLINFO_TOTAL_TIME_T, &total);
+            // if (CURLE_OK != res2)
+            // {
+            //     total = -1;
+            // }
 
-            curl_off_t start = -1, connect = -1, total = -1;
-            struct memory body = {0}, header = {0};
-            // from response
-            curl_easy_setopt(easy_handle, CURLOPT_WRITEFUNCTION, response_writer);
-            curl_easy_setopt(easy_handle, CURLOPT_WRITEDATA, (void *)&body);
-            curl_easy_setopt(easy_handle, CURLOPT_HEADERDATA, &header);
-            curl_easy_setopt(easy_handle, CURLOPT_HEADERFUNCTION, response_writer);
-            printf("%s DONE\n", done_url);
-
-            curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->status_code);
-            CURLcode res2;
-            res2 = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
-            if (CURLE_OK != res2)
-            {
-                connect = -1;
-            }
-            res2 = curl_easy_getinfo(easy_handle, CURLINFO_STARTTRANSFER_TIME_T, &start);
-            if (CURLE_OK != res2)
-            {
-                start = -1;
-            }
-            res2 = curl_easy_getinfo(easy_handle, CURLINFO_TOTAL_TIME_T, &total);
-            if (CURLE_OK != res2)
-            {
-                total = -1;
-            }
-
-            if (response_ref->debug > 2)
-            {
-                printf("status_code=%d\n", response_ref->status_code);
-                printf("before_connect_time_microsec=%lld,after_response_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf.total2=%lld\n", response_ref->before_connect_time_microsec, response_ref->after_response_time_microsec, connect / 1e6, start / 1e6, total / 1e6, response_ref->after_response_time_microsec - response_ref->before_connect_time_microsec);
-            }
-            if (response_ref->debug > 3)
-            {
-                printf("%s\n%s\n", header.data, body.data);
-            }
+            // if (response_ref->debug > 2)
+            // {
+            //     printf("status_code=%d\n", response_ref->status_code);
+            //     printf("before_connect_time_microsec=%lld,after_response_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf.total2=%lld\n", response_ref->before_connect_time_microsec, response_ref->after_response_time_microsec, connect / 1e6, start / 1e6, total / 1e6, response_ref->after_response_time_microsec - response_ref->before_connect_time_microsec);
+            // }
+            // if (response_ref->debug > 3)
+            // {
+            //     printf("%s\n%s\n", header.data, body.data);
+            // }
 
             curl_multi_remove_handle(curl_handlers.curl_handle, easy_handle);
             curl_easy_cleanup(easy_handle);
@@ -518,7 +518,7 @@ static void on_timeout(curl_handlers_t curl_handlers, uv_timer_t *req)
 static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeout_ms, void *userp)
 {
     printf("timeout_ms->%ld\n", timeout_ms);
-    // 
+    //
     // struct create_on_timeout_with_context
     // {
     //     create_on_timeout_with_context(curl_handlers_t curl_handlers) : ch(curl_handlers) {} // Constructor
@@ -530,21 +530,26 @@ static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeo
 
     // create_on_timeout_with_context on_timeout_with_context(curl_handlers);
 
-    // auto on_timeout_with_context = [curl_handlers](uv_timer_t *req) mutable
+    // auto on_timeout_with_context = [curl_handlers](uv_timer_t *req)
     // {
     //     on_timeout(curl_handlers, req);
     // };
 
-    struct create_on_timeout_with_context
-    {
-        curl_handlers_t curl_handlers;
-        void operator()(uv_timer_t *req) { on_timeout(curl_handlers, req); }
-    };
+    // int(decltype(on_timeout_with_context)::*ptr)(uv_timer_t *req)const = &decltype(on_timeout_with_context)::operator();
 
-    create_on_timeout_with_context on_timeout_with_context;
-    on_timeout_with_context.curl_handlers=curl_handlers;
+    // struct create_on_timeout_with_context
+    // {
+    //     curl_handlers_t curl_handlers;
+    //     void operator()(uv_timer_t *req) { on_timeout(curl_handlers, req); }
+    // };
+
+    // create_on_timeout_with_context on_timeout_with_context;
+    // on_timeout_with_context.curl_handlers=curl_handlers;
 
     // https://www.nextptr.com/tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
+
+    auto on_timeout_with_context = new std::function<void(uv_timer_t * req)>([=](uv_timer_t *req)
+                                                                             { on_timeout(curl_handlers, req); });
 
     if (timeout_ms < 0)
     {
@@ -556,8 +561,7 @@ static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeo
             timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
                                in a bit */
 
-        
-        uv_timer_start(&curl_handlers.timeout, on_timeout_with_context, timeout_ms, 0);
+        uv_timer_start(&curl_handlers.timeout, (uv_timer_cb)on_timeout_with_context, timeout_ms, 0);
     }
     return 0;
 }
@@ -573,6 +577,7 @@ static int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_
     case CURL_POLL_IN:
     case CURL_POLL_OUT:
     case CURL_POLL_INOUT:
+    {
         curl_context = socketp ? (curl_context_t *)socketp : create_curl_context(curl_handlers, s);
 
         curl_multi_assign(curl_handlers.curl_handle, s, (void *)curl_context);
@@ -582,13 +587,17 @@ static int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_
         if (action != CURL_POLL_OUT)
             events |= UV_READABLE;
 
-        auto curl_perform_with_context = [curl_handlers](uv_poll_t *req, int status, int events)
-        {
-            return curl_perform(curl_handlers, req, status, events);
-        };
-        uv_poll_start(&curl_context->poll_handle, events, curl_perform_with_context);
+        // auto curl_perform_with_context = [curl_handlers](uv_poll_t *req, int status, int events)
+        // {
+        //     return curl_perform(curl_handlers, req, status, events);
+        // };
+        auto curl_perform_with_context = new std::function<void(uv_poll_t * req, int status, int events)>([=](uv_poll_t *req, int status, int events)
+                                                                                                          { curl_perform(curl_handlers, req, status, events); });
+        uv_poll_start(&curl_context->poll_handle, events, (uv_poll_cb)curl_perform_with_context);
         break;
+    }
     case CURL_POLL_REMOVE:
+    {
         if (socketp)
         {
             uv_poll_stop(&((curl_context_t *)socketp)->poll_handle);
@@ -596,6 +605,7 @@ static int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_
             curl_multi_assign(curl_handlers.curl_handle, s, NULL);
         }
         break;
+    }
     default:
         abort();
     }
@@ -638,6 +648,7 @@ void *loop_on_the_thread(void *data)
     }
     uv_run(curl_handlers.loop, UV_RUN_DEFAULT);
     curl_multi_cleanup(curl_handlers.curl_handle);
+    return NULL;
 }
 
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)

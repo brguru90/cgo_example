@@ -100,5 +100,13 @@ struct memory
     size_t size;
 };
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
-void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug);
+    void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug);
+
+#ifdef __cplusplus
+}
+#endif
