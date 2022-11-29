@@ -366,6 +366,7 @@ static void add_request_to_event_loop(curl_handlers_t curl_handlers, request_inp
         printf("body=>%s\n\n", req_input->body);
     }
 
+
     CURL *curl;
     curl = curl_easy_init();
     struct curl_slist *header_list = NULL;
@@ -549,7 +550,11 @@ static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeo
     // https://www.nextptr.com/tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
 
     auto on_timeout_with_context = new std::function<void(uv_timer_t * req)>([=](uv_timer_t *req)
-                                                                             { on_timeout(curl_handlers, req); });
+                                                                             { 
+
+                                                                                 printf("------------");
+                                                                                //  on_timeout(curl_handlers, req);
+                                                                              });
 
     if (timeout_ms < 0)
     {
