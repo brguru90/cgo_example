@@ -583,7 +583,6 @@ int start_timeout(curl_handlers_t *curl_handlers, CURLM *multi, long timeout_ms,
 
     long curl_handlers_temp = 10;
 
-
     if (timeout_ms < 0)
     {
         uv_timer_stop(&curl_handlers->timeout);
@@ -593,9 +592,10 @@ int start_timeout(curl_handlers_t *curl_handlers, CURLM *multi, long timeout_ms,
         if (timeout_ms == 0)
             timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
                                in a bit */
-    printf("on_timeout check pointer,,=%d,%d\n", global_curl_handlers, curl_handlers_temp);
+        printf("on_timeout check pointer,,=%d,%d\n", global_curl_handlers, curl_handlers_temp);
         auto on_timeout_with_context = [curl_handlers_temp](uv_timer_t *req)
         {
+            // !!!! some reason here pointer address getting modified
             printf("~~on_timeout check pointer,,,,=%d,%d\n", global_curl_handlers, curl_handlers_temp);
             // return on_timeout(*curl_handlers, req);
         };
