@@ -1,11 +1,10 @@
 #include "api_req_async.hpp"
 
-
-
 void *loop_on_the_thread(void *data)
 {
-  thread_data *td = (thread_data *)data;
-  td->api_req_async_on_thread.run(td);
+    thread_data *td = (thread_data *)data;
+    td->api_req_async_on_thread.run(td);
+    return NULL;
 }
 
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
@@ -33,8 +32,8 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     }
 
     int thread_size = (left_out_work == 0 ? num_of_threads : num_of_threads + 1);
-    pthread_t *threads = malloc(sizeof(pthread_t) * thread_size);
-    thread_data *threads_data = malloc(sizeof(thread_data) * thread_size);
+    pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * thread_size);
+    thread_data *threads_data = (thread_data *)malloc(sizeof(thread_data) * thread_size);
     // api_req_async *api_req_async_on_thread=(api_req_async*)malloc(sizeof(api_req_async)*thread_size);
 
     for (int i = 0; i < thread_size; i++)
@@ -44,7 +43,7 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].debug_flag = debug;
         threads_data[i].thread_id = i;
         threads_data[i].th_pool_data = proc_data[i];
-        threads_data[i].api_req_async_on_thread=api_req_async();
+        threads_data[i].api_req_async_on_thread = api_req_async();
     }
 
     for (int p = 0; p < thread_size; p++)
@@ -56,10 +55,10 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         }
     }
 
-    // for (int i = 0; i < thread_size; i++)
-    // {
-    //     pthread_join(threads[i], NULL);
-    // }
-    // free(threads);
-    // free(threads_data);
+    for (int i = 0; i < thread_size; i++)
+    {
+        pthread_join(threads[i], NULL);
+    }
+    free(threads);
+    free(threads_data);
 }

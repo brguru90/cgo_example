@@ -8,6 +8,56 @@ long long get_current_time()
     return (((long long)tv.tv_sec) * 1e6) + (tv.tv_usec);
 }
 
+struct Closure_handle_socket
+{
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(CURL *easy, curl_socket_t s, int action, void *userp, void *socketp)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(easy, s, action, userp, socketp);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(CURL *, curl_socket_t, int, void *, void *), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
+struct Closure_start_timeout
+{
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(CURLM *multi, long timeout_ms, void *userp)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(multi, timeout_ms, userp);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(CURLM *, long, void *), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
 api_req_async::api_req_async()
 {
     loop = uv_default_loop();
@@ -22,8 +72,20 @@ api_req_async::api_req_async()
     uv_timer_init(loop, &timeout);
 
     curl_handle = curl_multi_init();
-    curl_multi_setopt(curl_handle, CURLMOPT_SOCKETFUNCTION, handle_socket);
-    curl_multi_setopt(curl_handle, CURLMOPT_TIMERFUNCTION, start_timeout);
+
+    auto handle_socket_with_context = [=](CURL *easy, curl_socket_t s, int action, void *userp, void *socketp) -> int
+    {
+        return handle_socket(easy, s, action, userp, socketp);
+    };
+    auto _closure_handle_socket = Closure_handle_socket::create<int>(handle_socket_with_context);
+    auto start_timeout_with_context = [=](CURLM *multi, long timeout_ms, void *userp) -> int
+    {
+        return start_timeout(multi, timeout_ms, userp);
+    };
+    auto _closure_start_timeout = Closure_start_timeout::create<int>(start_timeout_with_context);
+
+    curl_multi_setopt(curl_handle, CURLMOPT_SOCKETFUNCTION, _closure_handle_socket);
+    curl_multi_setopt(curl_handle, CURLMOPT_TIMERFUNCTION, _closure_start_timeout);
 }
 
 api_req_async::~api_req_async()
@@ -46,6 +108,7 @@ void *api_req_async::run(void *data)
     }
     uv_run(loop, UV_RUN_DEFAULT);
     curl_multi_cleanup(curl_handle);
+    return NULL;
 }
 
 curl_context_t *api_req_async::create_curl_context(curl_socket_t sockfd)
@@ -68,9 +131,39 @@ void api_req_async::curl_close_cb(uv_handle_t *handle)
     free(context);
 }
 
+struct Closure_curl_close_cb
+{
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(uv_handle_t *handle)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(handle);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(uv_handle_t *handle), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
 void api_req_async::destroy_curl_context(curl_context_t *context)
 {
-    uv_close((uv_handle_t *)&context->poll_handle, curl_close_cb);
+    auto curl_close_cb_with_context = [=](uv_handle_t *handle)
+    {
+        return curl_close_cb(handle);
+    };
+    auto _curl_close_cb_with_context = Closure_curl_close_cb::create<void>(curl_close_cb_with_context);
+    uv_close((uv_handle_t *)&context->poll_handle, (uv_close_cb)_curl_close_cb_with_context);
 }
 
 void api_req_async::curl_perform(uv_poll_t *req, int status, int events)
@@ -102,9 +195,39 @@ void api_req_async::on_timeout(uv_timer_t *req)
     on_request_complete(res);
 }
 
+struct Closure_on_timeout
+{
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(uv_timer_t *req)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(req);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(uv_timer_t *req), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
 int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
 {
     printf("timeout_ms->%ld\n", timeout_ms);
+    auto on_timeout_with_context = [=](uv_timer_t *req)
+    {
+        return on_timeout(req);
+    };
+    auto _on_timeout_with_context = Closure_on_timeout::create<void>(on_timeout_with_context);
     if (timeout_ms < 0)
     {
         uv_timer_stop(&timeout);
@@ -114,14 +237,46 @@ int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
         if (timeout_ms == 0)
             timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
                                in a bit */
-        uv_timer_start(&timeout, on_timeout, timeout_ms, 0);
+        uv_timer_start(&timeout, (uv_timer_cb)_on_timeout_with_context, timeout_ms, 0);
     }
     return 0;
 }
 
+struct Closure_curl_perform
+{
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(uv_poll_t *req, int status, int events)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(req, status, events);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(uv_poll_t *req, int status, int events), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
 int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *userp,
                                  void *socketp)
 {
+
+    auto curl_perform_with_context = [=](uv_poll_t *req, int status, int events)
+    {
+        return curl_perform(req, status, events);
+    };
+    auto _curl_perform_with_context = Closure_curl_perform::create<void>(curl_perform_with_context);
+
     curl_context_t *curl_context;
     int events = 0;
 
@@ -139,7 +294,7 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
         if (action != CURL_POLL_OUT)
             events |= UV_READABLE;
 
-        uv_poll_start(&curl_context->poll_handle, events, curl_perform);
+        uv_poll_start(&curl_context->poll_handle, events, (uv_poll_cb)_curl_perform_with_context);
         break;
     case CURL_POLL_REMOVE:
         if (socketp)
@@ -156,13 +311,12 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
     return 0;
 }
 
-
 static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp)
 {
     size_t realsize = size * nmemb;
     struct memory *mem = (struct memory *)userp;
 
-    char *ptr = realloc(mem->data, mem->size + realsize + 1);
+    char *ptr = (char *)realloc(mem->data, mem->size + realsize + 1);
     if (ptr == NULL)
         return 0; /* out of memory! */
 
@@ -231,7 +385,7 @@ void api_req_async::add_request_to_event_loop(request_input *req_input, response
     }
 }
 
-void api_req_async::on_request_complete(CURLMcode res)
+void api_req_async::on_request_complete(CURLMcode resM)
 {
     char *done_url;
     CURLMsg *message;
@@ -244,20 +398,21 @@ void api_req_async::on_request_complete(CURLMcode res)
         switch (message->msg)
         {
         case CURLMSG_DONE:
+        {
             /* Do not use message data after calling curl_multi_remove_handle() and
-               curl_easy_cleanup(). As per curl_multi_info_read() docs:
-               "WARNING: The data the returned pointer points to will not survive
-               calling curl_multi_cleanup, curl_multi_remove_handle or
-               curl_easy_cleanup." */
+           curl_easy_cleanup(). As per curl_multi_info_read() docs:
+           "WARNING: The data the returned pointer points to will not survive
+           calling curl_multi_cleanup, curl_multi_remove_handle or
+           curl_easy_cleanup." */
             easy_handle = message->easy_handle;
             curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, &done_url);
             printf("---done_url=%s\n", done_url);
             curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, &response_ref);
-            if (res != CURLE_OK)
-            {
-                response_ref->status_code = -1;
-                response_ref->err_code = res;
-            }
+            // if (res != CURLE_OK)
+            // {
+            //     response_ref->status_code = -1;
+            //     response_ref->err_code = res;
+            // }
             response_ref->after_response_time_microsec = get_current_time();
 
             curl_off_t start = -1, connect = -1, total = -1;
@@ -270,7 +425,7 @@ void api_req_async::on_request_complete(CURLMcode res)
             printf("%s DONE\n", done_url);
 
             curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->status_code);
-            res = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
+            CURLcode res = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
             if (CURLE_OK != res)
             {
                 connect = -1;
@@ -300,10 +455,13 @@ void api_req_async::on_request_complete(CURLMcode res)
             curl_easy_cleanup(easy_handle);
 
             break;
+        }
 
         default:
+        {
             fprintf(stderr, "CURLMSG default\n");
             break;
+        }
         }
     }
 }
