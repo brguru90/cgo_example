@@ -48,6 +48,8 @@ int gettimeofday(struct timeval *tv, struct timezone *tz)
 }
 #endif
 
+curl_handlers_t *global_curl_handlers;
+
 long long get_current_time()
 {
     struct timeval tv;
@@ -499,13 +501,15 @@ static void curl_perform(curl_handlers_t curl_handlers, uv_poll_t *req, int stat
     on_request_complete(curl_handlers, res);
 }
 
-static void on_timeout(curl_handlers_t curl_handlers, uv_timer_t *req)
+void on_timeout(curl_handlers_t curl_handlers, uv_timer_t *req)
 {
+    printf("om timeout");
+    printf("check pointer=%d,%d\n", global_curl_handlers, &curl_handlers);
     int running_handles;
     CURLMcode res;
     res = curl_multi_socket_action(curl_handlers.curl_handle, CURL_SOCKET_TIMEOUT, 0,
                                    &running_handles);
-    on_request_complete(curl_handlers, res);
+    // on_request_complete(*curl_handlers, res);
 }
 
 // std::function<void(uv_timer_t *req)> get_on_timeout_with_context(curl_handlers_t curl_handlers)
@@ -514,11 +518,34 @@ static void on_timeout(curl_handlers_t curl_handlers, uv_timer_t *req)
 //         on_timeout(curl_handlers, req);
 //     };
 // }
-
-static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeout_ms, void *userp)
+struct Closure_on_timeout
 {
-    printf("timeout_ms->%ld\n", timeout_ms);
-    //
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(uv_timer_t *req)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(req);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(uv_timer_t *), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
+int start_timeout(curl_handlers_t *curl_handlers, CURLM *multi, long timeout_ms, void *userp)
+{
+    printf("start_timeout\n");
     // struct create_on_timeout_with_context
     // {
     //     create_on_timeout_with_context(curl_handlers_t curl_handlers) : ch(curl_handlers) {} // Constructor
@@ -529,11 +556,6 @@ static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeo
     // };
 
     // create_on_timeout_with_context on_timeout_with_context(curl_handlers);
-
-    // auto on_timeout_with_context = [curl_handlers](uv_timer_t *req)
-    // {
-    //     on_timeout(curl_handlers, req);
-    // };
 
     // int(decltype(on_timeout_with_context)::*ptr)(uv_timer_t *req)const = &decltype(on_timeout_with_context)::operator();
 
@@ -546,7 +568,7 @@ static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeo
     // create_on_timeout_with_context on_timeout_with_context;
     // on_timeout_with_context.curl_handlers=curl_handlers;
 
-    // https://www.nextptr.com/tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
+    // https://www.nextptr.com  tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
 
     // auto on_timeout_with_context = new std::function<void(uv_timer_t * req)>([=](uv_timer_t *req)
     //                                                                          {
@@ -555,24 +577,64 @@ static int start_timeout(curl_handlers_t curl_handlers, CURLM *multi, long timeo
     //                                                                             //  on_timeout(curl_handlers, req);
     //                                                                           });
 
-    // if (timeout_ms < 0)
-    // {
-    //     uv_timer_stop(&curl_handlers.timeout);
-    // }
-    // else
-    // {
-    //     if (timeout_ms == 0)
-    //         timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
-    //                            in a bit */
+    printf("global_curl_handlers->timeout=%d\n", curl_handlers->timeout);
 
-    //     uv_timer_start(&curl_handlers.timeout, (uv_timer_cb)on_timeout_with_context, timeout_ms, 0);
-    // }
+    printf("start_timeout check pointer=%d,%d\n", global_curl_handlers, curl_handlers);
+
+    long curl_handlers_temp = 10;
+
+
+    if (timeout_ms < 0)
+    {
+        uv_timer_stop(&curl_handlers->timeout);
+    }
+    else
+    {
+        if (timeout_ms == 0)
+            timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
+                               in a bit */
+    printf("on_timeout check pointer,,=%d,%d\n", global_curl_handlers, curl_handlers_temp);
+        auto on_timeout_with_context = [curl_handlers_temp](uv_timer_t *req)
+        {
+            printf("~~on_timeout check pointer,,,,=%d,%d\n", global_curl_handlers, curl_handlers_temp);
+            // return on_timeout(*curl_handlers, req);
+        };
+        auto closure = Closure_on_timeout::create<void>(on_timeout_with_context);
+        uv_timer_start(&curl_handlers->timeout, closure, timeout_ms, 0);
+        // uv_timer_start(&curl_handlers.timeout, []( uv_timer_t *req){printf("timeoutttttt");}, timeout_ms, 0);
+    }
     return 0;
 }
 
-static int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_t s, int action, void *userp,
-                         void *socketp)
+struct Closure_curl_perform
 {
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(uv_poll_t *req, int status, int events)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(req, status, events);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(uv_poll_t *, int, int), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
+int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_t s, int action, void *userp,
+                  void *socketp)
+{
+    printf("handle_socket\n");
     curl_context_t *curl_context;
     int events = 0;
 
@@ -591,13 +653,16 @@ static int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_
         if (action != CURL_POLL_OUT)
             events |= UV_READABLE;
 
-        // auto curl_perform_with_context = [curl_handlers](uv_poll_t *req, int status, int events)
-        // {
-        //     return curl_perform(curl_handlers, req, status, events);
-        // };
-        auto curl_perform_with_context = new std::function<void(uv_poll_t * req, int status, int events)>([=](uv_poll_t *req, int status, int events)
-                                                                                                          { curl_perform(curl_handlers, req, status, events); });
-        uv_poll_start(&curl_context->poll_handle, events, (uv_poll_cb)curl_perform_with_context);
+        auto curl_perform_with_context = [curl_handlers](uv_poll_t *req, int status, int events)
+        {
+            return curl_perform(curl_handlers, req, status, events);
+        };
+        // auto curl_perform_with_context = new std::function<void(uv_poll_t * req, int status, int events)>([=](uv_poll_t *req, int status, int events)
+        //                                                                                                   { curl_perform(curl_handlers, req, status, events); });
+
+        auto closure = Closure_curl_perform::create<void>(curl_perform_with_context);
+
+        uv_poll_start(&curl_context->poll_handle, events, (uv_poll_cb)closure);
         break;
     }
     case CURL_POLL_REMOVE:
@@ -617,18 +682,62 @@ static int handle_socket(curl_handlers_t curl_handlers, CURL *easy, curl_socket_
     return 0;
 }
 
-typedef struct start_timeout_with_context_Type
+struct Closure_handle_socket
 {
-    CURLM *multi;
-    long timeout_ms;
-    void *userp;
-} start_timeout_with_context_type;
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(CURL *easy, curl_socket_t s, int action, void *userp, void *socketp)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(easy, s, action, userp, socketp);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(CURL *, curl_socket_t, int, void *, void *), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
+struct Closure_start_timeout
+{
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(CURLM *multi, long timeout_ms, void *userp)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(multi, timeout_ms, userp);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(CURLM *, long, void *), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
 
 void *loop_on_the_thread(void *data)
 {
     thread_data *td = (thread_data *)data;
 
     curl_handlers_t curl_handlers;
+    global_curl_handlers = &curl_handlers;
 
     curl_handlers.loop = uv_default_loop();
 
@@ -641,20 +750,21 @@ void *loop_on_the_thread(void *data)
     uv_timer_init(curl_handlers.loop, &curl_handlers.timeout);
 
     curl_handlers.curl_handle = curl_multi_init();
+
     auto handle_socket_with_context = [curl_handlers](CURL *easy, curl_socket_t s, int action, void *userp, void *socketp) -> int
     {
         return handle_socket(curl_handlers, easy, s, action, userp, socketp);
     };
-    auto start_timeout_with_context = [curl_handlers](CURLM *multi, long timeout_ms, void *userp) -> int
+    auto _closure_handle_socket = Closure_handle_socket::create<int>(handle_socket_with_context);
+    auto start_timeout_with_context = [&curl_handlers](CURLM *multi, long timeout_ms, void *userp) -> int
     {
-        printf("~~~~~~~~~~");
-        // return start_timeout(curl_handlers, multi, timeout_ms, userp);
-        return 1;
+        return start_timeout(&curl_handlers, multi, timeout_ms, userp);
     };
-    curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_SOCKETFUNCTION, handle_socket_with_context);
+    auto _closure_start_timeout = Closure_start_timeout::create<int>(start_timeout_with_context);
 
-    curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_TIMERFUNCTION, start_timeout_with_context);
-    
+    curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_SOCKETFUNCTION, _closure_handle_socket);
+    curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_TIMERFUNCTION, _closure_start_timeout);
+
     for (int i = td->th_pool_data.start_index; i <= td->th_pool_data.end_index; i++)
     {
 

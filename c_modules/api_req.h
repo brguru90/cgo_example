@@ -101,29 +101,6 @@ struct memory
 };
 
 
-// struct Closure
-// {
-//     template <typename Any, typename RETURN_TYPE>
-//     static Any lambda_ptr_exec(void *data)
-//     {
-//         return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(data);
-//     }
-
-//     template <typename Any=void,typename CALLER_TYPE=Any(*)(void*), typename RETURN_TYPE>
-//     static CALLER_TYPE create(RETURN_TYPE &t){
-//         callback<RETURN_TYPE>(&t);
-//         return (CALLER_TYPE)lambda_ptr_exec<Any,RETURN_TYPE>;
-//     }
-
-//     template <typename T>
-//     static void *callback(void *new_callback = nullptr)
-//     {
-//         static void *callback;
-//         if (new_callback != nullptr)
-//             callback = new_callback;
-//         return callback;
-//     }
-// };
 
 
 #ifdef __cplusplus

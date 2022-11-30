@@ -108,7 +108,7 @@ func Call_api() {
 	ram_size_in_GB := float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE)) / (1024 * 1024)
 	nor_of_thread := math.Ceil(ram_size_in_GB / 70)
 	fmt.Println("Nor of threads", nor_of_thread)
-	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(nor_of_thread), 2)
+	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(nor_of_thread),2)
 
 
 	for i = 0; i < total_requests; i++ {
