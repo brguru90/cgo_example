@@ -8,22 +8,31 @@ long long get_current_time()
     return (((long long)tv.tv_sec) * 1e6) + (tv.tv_usec);
 }
 
-api_req_async::api_req_async()
+bool HttpRequestMgr::init()
 {
-    loop = uv_default_loop();
-
+    curl_handlers.loop = uv_default_loop();
     if (curl_global_init(CURL_GLOBAL_ALL))
     {
         fprintf(stderr, "Could not init curl\n");
-        loop = NULL;
-        return;
+        curl_handlers.loop = NULL;
+        return false;
     }
+    curl_handlers.curl_handle = curl_multi_init();
+    return true;
+}
 
-    uv_timer_init(loop, &timeout);
-
-    curl_handle = curl_multi_init();
-    curl_multi_setopt(curl_handle, CURLMOPT_SOCKETFUNCTION, handle_socket);
-    curl_multi_setopt(curl_handle, CURLMOPT_TIMERFUNCTION, start_timeout);
+api_req_async::api_req_async()
+{
+    if(HttpRequestMgr::instance().getCurlHandler().loop!=NULL){
+        printf("Already initalised");
+        abort();
+    }
+    printf("api_req_async\n");
+    HttpRequestMgr::instance().init();
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
+    uv_timer_init(curl_handlers.loop, &curl_handlers.timeout);
+    curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_SOCKETFUNCTION, handle_socket);
+    curl_multi_setopt(curl_handlers.curl_handle, CURLMOPT_TIMERFUNCTION, start_timeout);
 }
 
 api_req_async::~api_req_async()
@@ -32,7 +41,8 @@ api_req_async::~api_req_async()
 
 void *api_req_async::run(void *data)
 {
-    if (loop == NULL)
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
+    if (curl_handlers.loop == NULL)
     {
         return NULL;
     }
@@ -40,23 +50,25 @@ void *api_req_async::run(void *data)
 
     for (int i = td->th_pool_data.start_index; i <= td->th_pool_data.end_index; i++)
     {
-
         add_request_to_event_loop(&(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
         // send_raw_request(&(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
     }
-    uv_run(loop, UV_RUN_DEFAULT);
-    curl_multi_cleanup(curl_handle);
+    uv_run(curl_handlers.loop, UV_RUN_DEFAULT);
+    curl_multi_cleanup(curl_handlers.curl_handle);
+    return NULL;
 }
 
 curl_context_t *api_req_async::create_curl_context(curl_socket_t sockfd)
 {
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
+
     curl_context_t *context;
 
     context = (curl_context_t *)malloc(sizeof(*context));
 
     context->sockfd = sockfd;
 
-    uv_poll_init_socket(loop, &context->poll_handle, sockfd);
+    uv_poll_init_socket(curl_handlers.loop, &context->poll_handle, sockfd);
     context->poll_handle.data = context;
 
     return context;
@@ -75,6 +87,9 @@ void api_req_async::destroy_curl_context(curl_context_t *context)
 
 void api_req_async::curl_perform(uv_poll_t *req, int status, int events)
 {
+    printf("curl_perform\n");
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
+
     int running_handles;
     int flags = 0;
     curl_context_t *context;
@@ -87,7 +102,7 @@ void api_req_async::curl_perform(uv_poll_t *req, int status, int events)
 
     context = (curl_context_t *)req->data;
 
-    res = curl_multi_socket_action(curl_handle, context->sockfd, flags,
+    res = curl_multi_socket_action(curl_handlers.curl_handle, context->sockfd, flags,
                                    &running_handles);
 
     on_request_complete(res);
@@ -95,26 +110,30 @@ void api_req_async::curl_perform(uv_poll_t *req, int status, int events)
 
 void api_req_async::on_timeout(uv_timer_t *req)
 {
+    printf("on_timeout\n");
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
+
     int running_handles;
     CURLMcode res;
-    res = curl_multi_socket_action(curl_handle, CURL_SOCKET_TIMEOUT, 0,
+    res = curl_multi_socket_action(curl_handlers.curl_handle, CURL_SOCKET_TIMEOUT, 0,
                                    &running_handles);
     on_request_complete(res);
 }
 
 int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
 {
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
     printf("timeout_ms->%ld\n", timeout_ms);
     if (timeout_ms < 0)
     {
-        uv_timer_stop(&timeout);
+        uv_timer_stop(&curl_handlers.timeout);
     }
     else
     {
         if (timeout_ms == 0)
             timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
                                in a bit */
-        uv_timer_start(&timeout, on_timeout, timeout_ms, 0);
+        uv_timer_start(&curl_handlers.timeout, on_timeout, timeout_ms, 0);
     }
     return 0;
 }
@@ -122,6 +141,7 @@ int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
 int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *userp,
                                  void *socketp)
 {
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
     curl_context_t *curl_context;
     int events = 0;
 
@@ -132,7 +152,7 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
     case CURL_POLL_INOUT:
         curl_context = socketp ? (curl_context_t *)socketp : create_curl_context(s);
 
-        curl_multi_assign(curl_handle, s, (void *)curl_context);
+        curl_multi_assign(curl_handlers.curl_handle, s, (void *)curl_context);
 
         if (action != CURL_POLL_IN)
             events |= UV_WRITABLE;
@@ -146,7 +166,7 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
         {
             uv_poll_stop(&((curl_context_t *)socketp)->poll_handle);
             destroy_curl_context((curl_context_t *)socketp);
-            curl_multi_assign(curl_handle, s, NULL);
+            curl_multi_assign(curl_handlers.curl_handle, s, NULL);
         }
         break;
     default:
@@ -156,13 +176,12 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
     return 0;
 }
 
-
-static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp)
+size_t api_req_async::response_writer(void *data, size_t size, size_t nmemb, void *userp)
 {
     size_t realsize = size * nmemb;
     struct memory *mem = (struct memory *)userp;
 
-    char *ptr = realloc(mem->data, mem->size + realsize + 1);
+    char *ptr = (char *)realloc(mem->data, mem->size + realsize + 1);
     if (ptr == NULL)
         return 0; /* out of memory! */
 
@@ -176,6 +195,7 @@ static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp
 
 void api_req_async::add_request_to_event_loop(request_input *req_input, response_data *response_ref, int debug)
 {
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
     response_ref->status_code = -2;
     response_ref->debug = debug;
     if (debug > 0)
@@ -223,7 +243,7 @@ void api_req_async::add_request_to_event_loop(request_input *req_input, response
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req_input->method);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, req_input->time_out_in_sec);
 
-    curl_multi_add_handle(curl_handle, curl);
+    curl_multi_add_handle(curl_handlers.curl_handle, curl);
     response_ref->before_connect_time_microsec = get_current_time();
     if (debug > 1)
     {
@@ -231,33 +251,35 @@ void api_req_async::add_request_to_event_loop(request_input *req_input, response
     }
 }
 
-void api_req_async::on_request_complete(CURLMcode res)
+void api_req_async::on_request_complete(CURLMcode resM)
 {
+    curl_handlers_t curl_handlers = HttpRequestMgr::instance().getCurlHandler();
     char *done_url;
     CURLMsg *message;
     int pending;
     CURL *easy_handle;
     response_data *response_ref;
 
-    while ((message = curl_multi_info_read(curl_handle, &pending)))
+    while ((message = curl_multi_info_read(curl_handlers.curl_handle, &pending)))
     {
         switch (message->msg)
         {
         case CURLMSG_DONE:
+        {
             /* Do not use message data after calling curl_multi_remove_handle() and
-               curl_easy_cleanup(). As per curl_multi_info_read() docs:
-               "WARNING: The data the returned pointer points to will not survive
-               calling curl_multi_cleanup, curl_multi_remove_handle or
-               curl_easy_cleanup." */
+           curl_easy_cleanup(). As per curl_multi_info_read() docs:
+           "WARNING: The data the returned pointer points to will not survive
+           calling curl_multi_cleanup, curl_multi_remove_handle or
+           curl_easy_cleanup." */
             easy_handle = message->easy_handle;
             curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, &done_url);
             printf("---done_url=%s\n", done_url);
             curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, &response_ref);
-            if (res != CURLE_OK)
-            {
-                response_ref->status_code = -1;
-                response_ref->err_code = res;
-            }
+            // if (res != CURLE_OK)
+            // {
+            //     response_ref->status_code = -1;
+            //     response_ref->err_code = res;
+            // }
             response_ref->after_response_time_microsec = get_current_time();
 
             curl_off_t start = -1, connect = -1, total = -1;
@@ -270,7 +292,7 @@ void api_req_async::on_request_complete(CURLMcode res)
             printf("%s DONE\n", done_url);
 
             curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->status_code);
-            res = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
+            CURLcode res = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
             if (CURLE_OK != res)
             {
                 connect = -1;
@@ -296,14 +318,17 @@ void api_req_async::on_request_complete(CURLMcode res)
                 printf("%s\n%s\n", header.data, body.data);
             }
 
-            curl_multi_remove_handle(curl_handle, easy_handle);
+            curl_multi_remove_handle(curl_handlers.curl_handle, easy_handle);
             curl_easy_cleanup(easy_handle);
 
             break;
+        }
 
         default:
+        {
             fprintf(stderr, "CURLMSG default\n");
             break;
+        }
         }
     }
 }

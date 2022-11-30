@@ -10,7 +10,6 @@ package c_modules;
 #include "api_req.h"
 #cgo CFLAGS: -g -Wall
 #cgo LDFLAGS: -lssl -lcrypto -lpthread -lm
-#cgo LDFLAGS: -L${SRCDIR} api_req.so
 */
 import "C"
 import (
