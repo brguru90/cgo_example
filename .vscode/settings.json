@@ -10,6 +10,10 @@
         "curlver.h": "c",
         "stdarg.h": "c",
         "callback.h": "c",
-        "functional": "c"
+        "functional": "c",
+        "map": "cpp",
+        "array": "cpp",
+        "string": "cpp",
+        "string_view": "cpp"
     }
 }

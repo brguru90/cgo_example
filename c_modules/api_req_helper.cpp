@@ -14,6 +14,9 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     int max_work_on_thread = floor((float)total_requests / num_of_threads);
     int left_out_work = total_requests % num_of_threads;
 
+    // uv_loop_t *main_loop = uv_default_loop();
+    // uv_run(main_loop,UV_RUN_DEFAULT);
+
     printf("total_requests=%d,total_threads=%d,num_of_threads=%d,max_work_on_thread=%d,left_out_work=%d\n", total_requests, total_threads, num_of_threads, max_work_on_thread, left_out_work);
 
     thread_pool_data proc_data[left_out_work == 0 ? num_of_threads : num_of_threads + 1];
@@ -43,9 +46,10 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].debug_flag = debug;
         threads_data[i].thread_id = i;
         threads_data[i].th_pool_data = proc_data[i];
-        threads_data[i].api_req_async_on_thread = api_req_async();
+        threads_data[i].api_req_async_on_thread = api_req_async(i);
     }
 
+    // loop_on_the_thread((void *)&threads_data[0]);
     for (int p = 0; p < thread_size; p++)
     {
         if (pthread_create(&threads[p], NULL, loop_on_the_thread, (void *)&threads_data[p]) != 0)
@@ -61,4 +65,6 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     }
     free(threads);
     free(threads_data);
+    
+    printf("\n\n--------- end -----------\n\n");
 }
