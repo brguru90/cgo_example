@@ -12,6 +12,8 @@
 #include <sys/shm.h>
 #include <sys/ipc.h>
 #include <sys/wait.h>
+#include <inttypes.h>
+
 
 #ifndef __cplusplus
 #include <stdbool.h>
@@ -91,6 +93,21 @@ struct memory
     char *data;
     size_t size;
 };
+
+typedef struct BytesType
+{
+    unsigned char* ch;
+    long length;
+} bytes_type;
+
+typedef struct StringType
+{
+    char* ch;
+    long length;
+} string_type;
+
+
+
 
 
 #ifdef __cplusplus

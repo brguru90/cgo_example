@@ -62,9 +62,10 @@ struct Closure_start_timeout
     }
 };
 
-api_req_async::api_req_async(int th_id)
+api_req_async::api_req_async(int th_id, pthread_mutex_t *_lock)
 {
     // printf("api_req_async=%d\n",th_id);
+    lock = _lock;
     thread_id = th_id;
     // loop = uv_default_loop();
     // loop = uv_loop_new();
@@ -103,14 +104,26 @@ api_req_async::~api_req_async()
     free(curl_handle);
 }
 
+void *api_req_async::get_result()
+{
+    thread_data *td = (thread_data *)data;
+    // printf("%d,%d\n",td->th_pool_data.start_index,td->th_pool_data.end_index);
+
+    return td;
+}
+
 void *api_req_async::run(void *data)
 {
+
+    this->data = data;
     this->on_timeout_ptr = &api_req_async::on_timeout;
 
     loop = uv_loop_new();
     loop_addrs_int = (long)loop;
     // printf("loop=%ld\n", loop_addrs_int);
+    pthread_mutex_lock(lock);
     threadid_class_map[loop_addrs_int] = this;
+    pthread_mutex_unlock(lock);
 
     if (curl_global_init(CURL_GLOBAL_ALL))
     {
@@ -276,7 +289,7 @@ int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
         // printf("on_timeout_ptr2=%ld\n", (long)req->data);
         api_req_async *_this = threadid_class_map[(long)req->loop];
         // printf("on_timeout2-%d,%p\n", _this->thread_id, _this);
-        return  _this->on_timeout(req);
+        return _this->on_timeout(req);
     };
     auto _on_timeout_with_context = Closure_on_timeout::create<void>(on_timeout_with_context);
 
@@ -358,7 +371,10 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
         }
         break;
     default:
+    {
+        printf("--------aborting-----------\n");
         abort();
+    }
     }
 
     return 0;
@@ -440,7 +456,7 @@ void api_req_async::add_request_to_event_loop(request_input *req_input, response
 void api_req_async::on_request_complete()
 {
 
-    printf("th_id=%d,loop_id=%ld\n", thread_id,loop_addrs_int);
+    printf("th_id=%d,loop_id=%ld\n", thread_id, loop_addrs_int);
 
     char *done_url;
     CURLMsg *message;

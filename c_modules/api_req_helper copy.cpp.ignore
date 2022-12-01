@@ -1,14 +1,12 @@
 #include "api_req_async.hpp"
 
-#define BUFFER_SIZE 100
+#define BUFFER_SIZE 80
 #define PORT 14509
 #define SA struct sockaddr
 
 pthread_mutex_t lock;
 
-char end_of_data[] = "end_of_data";
-
-typedef void (*get_received_data_type)(StringType *raw_response);
+typedef void (*get_received_data_type)(char *);
 
 void loop_on_the_thread(void *data)
 {
@@ -22,20 +20,9 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
     uv_close((uv_handle_t *)req, NULL);
 }
 
-void send_data(thread_data td)
+void send_data(char buff[])
 {
-    int _size=sizeof(td)+strlen(end_of_data);
-    char bytes[_size];
-    memcpy(bytes, &td, sizeof(td));
-    for(int i=sizeof(td),j=0;i<_size && j<strlen(end_of_data);i++,j++){
-        bytes[i]=end_of_data[j];
-    }
-
-    // printf("data to send2=%s,len=%ld\n", bytes, sizeof(bytes));
-    // for (int l = 0; l < sizeof(bytes); l++)
-    //     printf("%02X ", bytes[l]);
-    // printf("\n");
-
+    printf("data to send=%s\n", buff);
     int sockfd, connfd;
     struct sockaddr_in servaddr, cli;
 
@@ -66,64 +53,13 @@ void send_data(thread_data td)
 
     // function for chat
     // write(sockfd, buff, sizeof(buff));
-    send(sockfd, bytes, sizeof(bytes), 0);
-    // send(sockfd, end_of_data, sizeof(end_of_data), 0);
-    bzero(bytes, strlen(bytes));
-
-    char buffer[BUFFER_SIZE];
-    bzero(buffer, BUFFER_SIZE);
-    // just make wait sender
-    recv(connfd, buffer, BUFFER_SIZE - 1, 0);
-    bzero(buffer, BUFFER_SIZE);
+    send(sockfd, buff, strlen(buff), 0);
+    printf("data sent=%s\n", buff);
+    bzero(buff, strlen(buff));
 
     // close the socket
     close(sockfd);
 }
-
-void my_strcpy(StringType &dest, char *src, int length)
-{
-    int prev_length = dest.length;
-    char temp[prev_length];
-    // resize & repopulate
-    memcpy(&temp, dest.ch, prev_length);
-    dest.ch = (char *)malloc(sizeof(char *) * (prev_length + length+1));
-    memcpy(dest.ch, &temp, prev_length);
-    int j = prev_length;
-    for (int i = 0; i < length; i++)
-    {
-        // printf("copy %02X ", dest.ch[prev_length + i]);
-        dest.ch[j + i] = src[i];
-    }
-    dest.length = prev_length + length;
-}
-
-int isSubString(StringType &dest, char end_of_data[])
-{
-    int i = dest.length;
-    // printf("i->%d,%d\n",i,i>=0);
-    int end_len = strlen(end_of_data);
-    while (i-- >= 0)
-    {
-        // printf("i->%d,%d\n",i,i>=0);
-        if (dest.ch[i] == end_of_data[end_len - 1])
-        {
-            for (int j = end_len - 1; j >= 0 && i >= 0; j--)
-            {
-                if (dest.ch[i--] == end_of_data[j])
-                {
-                    if (j == 0)
-                        return i + end_len + 1;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-    }
-    return -1;
-}
-
 void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 {
     int sockfd, connfd, len;
@@ -179,39 +115,21 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 
         // Function for chatting between client and server
         char buffer[BUFFER_SIZE];
-        bzero(buffer, BUFFER_SIZE);
         int n, cond;
 
-        // char *raw_response = (char *)malloc(1);
-        StringType raw_response;
-        // raw_response.ch=(char*)malloc(1);
-        raw_response.length = 0;
-        raw_response.ch = (char *)"";
+        char *raw_response = (char *)malloc(1);
         while ((cond = recv(connfd, buffer, BUFFER_SIZE - 1, 0)) > 0)
         {
-            // printf("%d)\n", cond);
-            // printf("Received:\n");
-            // for (int l = 0; l < sizeof(buffer); l++)
-            //     printf("%02X ", buffer[l]);
-            // printf("\n");
-            // strcpy(raw_response, buffer);
-            my_strcpy(raw_response, buffer, sizeof(buffer)-1);
-
-            // strncpy(raw_response, buffer,sizeof(buffer));
-            // printf("raw_response=%s,size=%d\n", raw_response.ch, raw_response.length);
-            // if ( strstr(raw_response.ch,end_of_data) != NULL)
-            int pos = 0;
-            if ((pos = isSubString(raw_response, end_of_data)) >= 0)
+            printf("%d)\n", cond);
+            strcpy(raw_response, buffer);
+            bzero(buffer, BUFFER_SIZE);
+            if (strncmp("end_of_data", buffer, 11) == 0)
             {
-                // printf("end_of_data,%d\n", pos);
-                raw_response.length = pos;
-                get_received_data_cb(&raw_response);
-                raw_response.ch = (char *)"";
-                raw_response.length = 0;
-                send(connfd, end_of_data, strlen(end_of_data), 0);
+                printf("end_of_data\n");
+                get_received_data_cb(raw_response);
+                raw_response = (char *)"";
                 break;
             }
-            bzero(buffer, BUFFER_SIZE);
         }
         // infinite loop for chat
         // char *raw_response = malloc(1);
@@ -246,57 +164,16 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
     close(sockfd);
 }
 
-struct Closure_raw_response
-{
-    template <typename Any, typename RETURN_TYPE>
-    static Any lambda_ptr_exec(StringType *raw_response)
-    {
-        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(raw_response);
-    }
-
-    template <typename Any = void, typename CALLER_TYPE = Any (*)(StringType *raw_response), typename RETURN_TYPE>
-    static CALLER_TYPE create(RETURN_TYPE &t)
-    {
-        callback<RETURN_TYPE>(&t);
-        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
-    }
-
-    template <typename T>
-    static void *callback(void *new_callback = nullptr)
-    {
-        static void *callback;
-        if (new_callback != nullptr)
-            callback = new_callback;
-        return callback;
-    }
-};
-
 void update_response_data(int thread_size, response_data *response_ref)
 {
-    auto lamda = [&](StringType *raw_response) -> void
+    auto lamda = [&](void *data) -> void
     {
-        raw_response->length = raw_response->length - strlen(end_of_data);
-        printf("\n\nfinal data from IPC->%d,%s\n", raw_response->length, raw_response->ch);
-        for (int l = 0; l < raw_response->length; l++)
-            printf("%02X ", raw_response->ch[l]);
-        printf("\n");
-
-        thread_data tmp;
-        memcpy(&tmp, raw_response->ch, sizeof(raw_response->length));
-
-        int start = tmp.th_pool_data.start_index;
-        int end = tmp.th_pool_data.end_index;
-
-        printf("start=%d,end=%d,%d\n", start, end, tmp.thread_id);
-
-        // for(int k=start;k<=end;k++){
-        //     printf("status_code=%d\n",tmp.response_ref_ptr[k].status_code);
-        // }
+        thread_data *td = (thread_data *)data;
+        printf("thread_id=%d", td->thread_id);
     };
-    // auto *closure = new std::function<void(StringType *raw_response)>(lamda);
-    auto lamda_with_context = Closure_raw_response::create<void>(lamda);
+    auto *closure = new std::function<void(void *data)>(lamda);
 
-    receive_data(thread_size, (get_received_data_type)lamda_with_context);
+    receive_data(thread_size, (get_received_data_type)closure);
 }
 
 typedef struct update_response_data_type
@@ -381,16 +258,39 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
             //     printf("status_code=%d\n",td.response_ref_ptr[k].status_code);
             // }
             // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
-
-            char bytes[sizeof(td)];
+            unsigned char bytes[sizeof(td)];
             memcpy(bytes, &td, sizeof(td));
+            unsigned char *buffer = (unsigned char *)malloc(sizeof(td));
+            for (int l = 0; l < sizeof(bytes); l++){
+                buffer[l]=bytes[l];
+            }
 
-            printf("data to send1=%s,len=%ld\n", bytes, sizeof(bytes));
             for (int l = 0; l < sizeof(bytes); l++)
                 printf("%02X ", bytes[l]);
             printf("\n");
 
-            send_data(td);
+
+            // for (int l = 0; l < sizeof(buffer); l++)
+            //     printf("%02X ", buffer[l]);
+            // printf("\n");
+
+            threads_data[p].raw_bytes.ch=bytes;
+            threads_data[p].raw_bytes.length=sizeof(bytes);
+
+
+            // strcpy(threads_data[p].raw_bytes,bytes);
+
+            // printf("bytes=%d,diff bytes=%d\n", sizeof(bytes), sizeof(threads_data[p].raw_bytes));
+
+            // thread_data tmp;
+            // memcpy(&tmp, bytes, sizeof(bytes));
+
+            // for (int k = start; k <= end; k++)
+            // {
+            //     printf("status_code=%d\n", tmp.response_ref_ptr[k].status_code);
+            // }
+
+            // send_data(bytes);
             exit(0);
         }
     }
@@ -399,7 +299,36 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     {
         wait(NULL);
     }
-    pthread_join(thread, NULL);
+
+    for (int p = 0; p < thread_size; p++)
+    {
+            // char bytes[sizeof(threads_data[p].raw_bytes)];
+            // strcpy(bytes, threads_data[p].raw_bytes);
+
+            thread_data tmp;
+            
+            char bytes[threads_data[p].raw_bytes.length];
+            for(int i=0;i<threads_data[p].raw_bytes.length;i++){
+                bytes[i]=threads_data[p].raw_bytes.ch[i];
+            }
+
+            for (int l = 0; l < sizeof(bytes); l++)
+                printf("%02X ", bytes[l]);
+            printf("\n");
+
+            memcpy(&tmp, bytes, sizeof(bytes));
+
+            int start=tmp.th_pool_data.start_index;
+            int end=tmp.th_pool_data.end_index;
+
+            printf("start=%d,end=%d,%d\n",start,end,tmp.thread_id);
+
+            // for(int k=start;k<=end;k++){
+            //     printf("status_code=%d\n",tmp.response_ref_ptr[k].status_code);
+            // }
+
+    }
+    // pthread_join(thread, NULL);
 
     printf("\n\n--------- end -----------\n\n");
 }
