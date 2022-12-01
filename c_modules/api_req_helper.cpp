@@ -287,6 +287,8 @@ void update_response_data(int thread_size, response_data *response_ref)
         int start = tmp.th_pool_data.start_index;
         int end = tmp.th_pool_data.end_index;
 
+        // https://github.com/bk192077/struct_mapping/blob/master/example/struct_to_json/struct_to_json.cpp
+
         printf("start=%d,end=%d,%d\n", start, end, tmp.thread_id);
 
         // for(int k=start;k<=end;k++){

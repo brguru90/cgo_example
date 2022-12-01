@@ -101,24 +101,21 @@ int main()
     if (!fork())
     {
         memcpy(bytes, &c, sizeof(c));
+        exit(0);
         // bytes[sizeof(*c3)]='\0';
     }
 
     char *my_s_bytes = reinterpret_cast<char *>(c3);
 
-    if (!fork())
-    {
-        printf("raw bytes=[[%s\n]][[%s]]\n", bytes, my_s_bytes);
-        for (int i = 0; i < sizeof(bytes); i++)
-            printf("%02X ", bytes[i]);
+    printf("raw bytes=[[%s\n]][[%s]]\n", bytes, my_s_bytes);
+    for (int i = 0; i < sizeof(bytes); i++)
+        printf("%02X ", bytes[i]);
+    printf("\n");
+    parent_t tmp;
+    memcpy(&tmp, bytes, sizeof(tmp));
 
-        parent_t tmp;
-        memcpy(&tmp, bytes, sizeof(tmp));
-
-        printf("\n\n%d\n", *tmp.child1->child2->a);
-        printf("%s\n", tmp.child1->child2->name);
-        exit(0);
-    }
+    printf("\n%d\n", *tmp.child1->child2->a);
+    printf("%s\n", tmp.child1->child2->name);
 
     return 0;
 }
