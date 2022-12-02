@@ -3,7 +3,6 @@
 #include <iterator>
 #include <functional>
 #include <sstream>
-#include "include/struct_mapping/struct_mapping.h"
 
 class api_req_async
 {
