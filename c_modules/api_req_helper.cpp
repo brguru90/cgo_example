@@ -1,7 +1,7 @@
 #include "api_req_async.hpp"
 
 #define BUFFER_SIZE 100
-#define PORT 14509
+#define PORT 14507
 #define SA struct sockaddr
 
 pthread_mutex_t lock;
@@ -22,13 +22,70 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
     uv_close((uv_handle_t *)req, NULL);
 }
 
+// void response_data_to_json(thread_data td)
+// {
+
+
+//     struct_mapping::reg(&headers_type::header, "header");
+
+
+//     struct_mapping::reg(&request_input::body, "body");
+//     struct_mapping::reg(&request_input::cookies, "cookies");
+//     struct_mapping::reg(&request_input::headers, "headers");
+//     struct_mapping::reg(&request_input::headers_len, "headers_len");
+//     struct_mapping::reg(&request_input::method, "method");
+//     struct_mapping::reg(&request_input::time_out_in_sec, "time_out_in_sec");
+//     struct_mapping::reg(&request_input::uid, "uid");
+//     struct_mapping::reg(&request_input::url, "url");
+
+
+//     struct_mapping::reg(&response_data::after_response_time_microsec, "after_response_time_microsec");
+//     struct_mapping::reg(&response_data::before_connect_time_microsec, "before_connect_time_microsec");
+//     struct_mapping::reg(&response_data::connect_time_microsec, "connect_time_microsec");
+//     struct_mapping::reg(&response_data::connected_at_microsec, "connected_at_microsec");
+//     struct_mapping::reg(&response_data::debug, "debug");
+//     struct_mapping::reg(&response_data::err_code, "err_code");
+//     struct_mapping::reg(&response_data::finish_at_microsec, "finish_at_microsec");
+//     struct_mapping::reg(&response_data::first_byte_at_microsec, "first_byte_at_microsec");
+//     struct_mapping::reg(&response_data::response_body, "response_body");
+//     struct_mapping::reg(&response_data::response_header, "response_header");
+//     struct_mapping::reg(&response_data::status_code, "status_code");
+//     struct_mapping::reg(&response_data::time_to_first_byte_microsec, "time_to_first_byte_microsec");
+//     struct_mapping::reg(&response_data::total_time_from_curl_microsec, "total_time_from_curl_microsec");
+//     struct_mapping::reg(&response_data::total_time_microsec, "total_time_microsec");
+//     struct_mapping::reg(&response_data::uid, "uid");
+
+
+//     struct_mapping::reg(&thread_pool_data::end_index, "end_index");
+//     struct_mapping::reg(&thread_pool_data::full_index, "full_index");
+//     struct_mapping::reg(&thread_pool_data::pid, "pid");
+//     struct_mapping::reg(&thread_pool_data::start_index, "start_index");
+//     struct_mapping::reg(&thread_pool_data::uuid, "uuid");
+
+
+
+
+//     struct_mapping::reg(&thread_data::req_inputs_ptr, "req_inputs_ptr");
+//     struct_mapping::reg(&thread_data::api_req_async_on_thread, "api_req_async_on_thread");
+//     struct_mapping::reg(&thread_data::debug_flag, "debug_flag");
+//     struct_mapping::reg(&thread_data::response_ref_ptr, "response_ref_ptr");
+//     struct_mapping::reg(&thread_data::th_pool_data, "th_pool_data");
+//     struct_mapping::reg(&thread_data::thread_id, "thread_id");
+
+
+//     std::ostringstream json_data;
+//     struct_mapping::map_struct_to_json(td, json_data, "  ");
+//     std::cout << json_data.str() << std::endl;
+// }
+
 void send_data(thread_data td)
 {
-    int _size=sizeof(td)+strlen(end_of_data);
+    int _size = sizeof(td) + strlen(end_of_data);
     char bytes[_size];
     memcpy(bytes, &td, sizeof(td));
-    for(int i=sizeof(td),j=0;i<_size && j<strlen(end_of_data);i++,j++){
-        bytes[i]=end_of_data[j];
+    for (int i = sizeof(td), j = 0; i < _size && j < strlen(end_of_data); i++, j++)
+    {
+        bytes[i] = end_of_data[j];
     }
 
     // printf("data to send2=%s,len=%ld\n", bytes, sizeof(bytes));
@@ -86,7 +143,7 @@ void my_strcpy(StringType &dest, char *src, int length)
     char temp[prev_length];
     // resize & repopulate
     memcpy(&temp, dest.ch, prev_length);
-    dest.ch = (char *)malloc(sizeof(char *) * (prev_length + length+1));
+    dest.ch = (char *)malloc(sizeof(char *) * (prev_length + length + 1));
     memcpy(dest.ch, &temp, prev_length);
     int j = prev_length;
     for (int i = 0; i < length; i++)
@@ -124,10 +181,12 @@ int isSubString(StringType &dest, char end_of_data[])
     return -1;
 }
 
+int *receive_data_sockfd;
 void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 {
     int sockfd, connfd, len;
     struct sockaddr_in servaddr, cli;
+    receive_data_sockfd=&sockfd;
 
     // socket create and verification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -195,7 +254,7 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
             //     printf("%02X ", buffer[l]);
             // printf("\n");
             // strcpy(raw_response, buffer);
-            my_strcpy(raw_response, buffer, sizeof(buffer)-1);
+            my_strcpy(raw_response, buffer, sizeof(buffer) - 1);
 
             // strncpy(raw_response, buffer,sizeof(buffer));
             // printf("raw_response=%s,size=%d\n", raw_response.ch, raw_response.length);
@@ -314,6 +373,81 @@ void *run_update_response_data(void *data)
     return NULL;
 }
 
+typedef void(*set_thread_data_type)(thread_data);
+
+void create_process(int thread_size,thread_data *threads_data,thread_pool_data proc_data[],set_thread_data_type set_thread_data){
+    for (int p = 0; p < thread_size; p++)
+    {
+        int temp_pid;
+        if ((proc_data[p].pid = fork()) == 0)
+        {
+            if (proc_data[p].pid == -1)
+            {
+                printf("failed to create process\n");
+                exit(1);
+            }
+            loop_on_the_thread((void *)&threads_data[p]);
+            thread_data td = (thread_data)threads_data[p];
+            int start = td.th_pool_data.start_index;
+            int end = td.th_pool_data.end_index;
+            response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
+            for(int k=start;k<=end;k++){
+                td_arr[k]=td.response_ref_ptr[k];
+                printf("status_code=%s\n",td.response_ref_ptr[k].Response_body);
+            }
+
+
+            thread_data_to_json(*td_arr,end-start+1);
+            printf("td=%d\n", td.thread_id);
+            // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
+
+            // char bytes[sizeof(td)];
+            // memcpy(bytes, &td, sizeof(td));
+
+            // printf("data to send1=%s,len=%ld\n", bytes, sizeof(bytes));
+            // for (int l = 0; l < sizeof(bytes); l++)
+            //     printf("%02X ", bytes[l]);
+            // printf("\n");
+
+            // response_data_to_json(td);
+            // send_data(td);
+            // set_thread_data(td);
+            exit(0);
+        }
+    }
+
+    for (int p = 0; p < thread_size; p++)
+    {
+        wait(NULL);
+    }
+}
+
+
+struct Closure_set_thread_data
+{
+    template <typename Any, typename RETURN_TYPE>
+    static Any lambda_ptr_exec(thread_data td)
+    {
+        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(td);
+    }
+
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(thread_data td), typename RETURN_TYPE>
+    static CALLER_TYPE create(RETURN_TYPE &t)
+    {
+        callback<RETURN_TYPE>(&t);
+        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
+    }
+
+    template <typename T>
+    static void *callback(void *new_callback = nullptr)
+    {
+        static void *callback;
+        if (new_callback != nullptr)
+            callback = new_callback;
+        return callback;
+    }
+};
+
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
 {
     int num_of_threads = total_requests >= total_threads ? total_threads : total_requests;
@@ -338,6 +472,7 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     }
 
     int thread_size = (left_out_work == 0 ? num_of_threads : num_of_threads + 1);
+    printf("thread_size=%d\n",thread_size);
     pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * thread_size);
     thread_data *threads_data = (thread_data *)malloc(sizeof(thread_data) * thread_size);
 
@@ -364,43 +499,27 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].api_req_async_on_thread = new api_req_async(i, &lock);
     }
 
-    for (int p = 0; p < thread_size; p++)
-    {
-        int temp_pid;
-        if ((proc_data[p].pid = fork()) == 0)
-        {
-            if (proc_data[p].pid == -1)
-            {
-                printf("failed to create process\n");
-                exit(1);
-            }
-            loop_on_the_thread((void *)&threads_data[p]);
-            thread_data td = (thread_data)threads_data[p];
-            printf("td=%d\n", td.thread_id);
-            int start = td.th_pool_data.start_index;
-            int end = td.th_pool_data.end_index;
-            // for(int k=start;k<=end;k++){
-            //     printf("status_code=%d\n",td.response_ref_ptr[k].status_code);
-            // }
-            // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
+    auto set_thread_data=[&](thread_data td){
 
-            char bytes[sizeof(td)];
-            memcpy(bytes, &td, sizeof(td));
-
-            printf("data to send1=%s,len=%ld\n", bytes, sizeof(bytes));
-            for (int l = 0; l < sizeof(bytes); l++)
-                printf("%02X ", bytes[l]);
-            printf("\n");
-
-            send_data(td);
-            exit(0);
+        // printf("lamda pid=%d\n",getpid());
+        int start=td.th_pool_data.start_index;
+        int end=td.th_pool_data.end_index;
+        // printf("start=%d,end=%d\n",start,end);
+        for(int i=start;i<=end;i++){
+            // printf("s=%d\n",td.response_ref_ptr[i].status_code);
+            response_ref[i]=td.response_ref_ptr[i];
         }
-    }
 
-    for (int p = 0; p < thread_size; p++)
-    {
-        wait(NULL);
-    }
+    };
+
+    auto set_thread_data_with_context = Closure_set_thread_data::create<void>(set_thread_data);
+
+
+    create_process(thread_size,threads_data,proc_data,set_thread_data_with_context);
+    printf("pid=%d\n",getpid());
+    pthread_cancel(thread);
+    close(*receive_data_sockfd);
+    
     pthread_join(thread, NULL);
 
     printf("\n\n--------- end -----------\n\n");

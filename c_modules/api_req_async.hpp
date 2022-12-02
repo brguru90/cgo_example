@@ -2,6 +2,8 @@
 #include <map>
 #include <iterator>
 #include <functional>
+#include <sstream>
+#include "include/struct_mapping/struct_mapping.h"
 
 class api_req_async
 {
@@ -41,3 +43,4 @@ typedef struct ThreadData
     api_req_async *api_req_async_on_thread;
     BytesType raw_bytes;
 } thread_data;
+

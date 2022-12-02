@@ -399,8 +399,8 @@ static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp
 
 void api_req_async::add_request_to_event_loop(request_input *req_input, response_data *response_ref, int debug)
 {
-    response_ref->status_code = -2;
-    response_ref->debug = debug;
+    response_ref->Status_code = -2;
+    response_ref->Debug = debug;
     if (debug > 0)
     {
         printf("debug_level%d\n", debug);
@@ -445,8 +445,17 @@ void api_req_async::add_request_to_event_loop(request_input *req_input, response
     }
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req_input->method);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, req_input->time_out_in_sec);
+
+    // struct memory body = {0}, header = {0};
+    response_ref->Resp_header={0};
+    response_ref->Resp_body={0};
+    // from response
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, response_writer);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&response_ref->Resp_body);
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response_ref->Resp_header);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, response_writer);
     curl_multi_add_handle(curl_handle, curl);
-    response_ref->before_connect_time_microsec = get_current_time();
+    response_ref->Before_connect_time_microsec = get_current_time();
     if (debug > 1)
     {
         printf("request added to event loop: %s\n", req_input->url);
@@ -456,7 +465,7 @@ void api_req_async::add_request_to_event_loop(request_input *req_input, response
 void api_req_async::on_request_complete()
 {
 
-    printf("th_id=%d,loop_id=%ld\n", thread_id, loop_addrs_int);
+    // printf("th_id=%d,loop_id=%ld\n", thread_id, loop_addrs_int);
 
     char *done_url;
     CURLMsg *message;
@@ -484,18 +493,11 @@ void api_req_async::on_request_complete()
             //     response_ref->status_code = -1;
             //     response_ref->err_code = res;
             // }
-            response_ref->after_response_time_microsec = get_current_time();
+            response_ref->After_response_time_microsec = get_current_time();
 
             curl_off_t start = -1, connect = -1, total = -1;
-            struct memory body = {0}, header = {0};
-            // from response
-            curl_easy_setopt(easy_handle, CURLOPT_WRITEFUNCTION, response_writer);
-            curl_easy_setopt(easy_handle, CURLOPT_WRITEDATA, (void *)&body);
-            curl_easy_setopt(easy_handle, CURLOPT_HEADERDATA, &header);
-            curl_easy_setopt(easy_handle, CURLOPT_HEADERFUNCTION, response_writer);
-            printf("%s DONE\n", done_url);
 
-            curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->status_code);
+            curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_ref->Status_code);
             CURLcode res = curl_easy_getinfo(easy_handle, CURLINFO_CONNECT_TIME_T, &connect);
             if (CURLE_OK != res)
             {
@@ -512,14 +514,25 @@ void api_req_async::on_request_complete()
                 total = -1;
             }
 
-            if (response_ref->debug > 2)
+            response_ref->Connect_time_microsec = connect;
+            response_ref->Time_to_first_byte_microsec = start;
+            response_ref->Total_time_from_curl_microsec = total;
+            response_ref->Total_time_microsec = (response_ref->After_response_time_microsec - response_ref->Before_connect_time_microsec);
+            response_ref->Connected_at_microsec = response_ref->Before_connect_time_microsec + connect;
+            response_ref->First_byte_at_microsec = response_ref->Before_connect_time_microsec + start;
+            response_ref->Finish_at_microsec = response_ref->Before_connect_time_microsec + response_ref->Total_time_microsec;
+
+            response_ref->Response_header=response_ref->Resp_header.data;
+            response_ref->Response_body=response_ref->Resp_body.data;
+
+            if (response_ref->Debug > 2)
             {
-                printf("status_code=%d\n", response_ref->status_code);
-                printf("before_connect_time_microsec=%lld,after_response_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf.total2=%lld\n", response_ref->before_connect_time_microsec, response_ref->after_response_time_microsec, connect / 1e6, start / 1e6, total / 1e6, response_ref->after_response_time_microsec - response_ref->before_connect_time_microsec);
+                printf("status_code=%d\n", response_ref->Status_code);
+                printf("before_connect_time_microsec=%lld,after_response_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf.total2=%lld\n", response_ref->Before_connect_time_microsec, response_ref->After_response_time_microsec, connect / 1e6, start / 1e6, total / 1e6, response_ref->After_response_time_microsec - response_ref->Before_connect_time_microsec);
             }
-            if (response_ref->debug > 3)
+            if (response_ref->Debug > 3)
             {
-                printf("%s\n%s\n", header.data, body.data);
+                printf("%s\n%s\n", response_ref->Response_header,response_ref->Response_body);
             }
 
             curl_multi_remove_handle(curl_handle, easy_handle);

@@ -59,25 +59,35 @@ typedef struct SingleRequestInput
     int time_out_in_sec;
 } request_input;
 
+
+struct memory
+{
+    char *data;
+    size_t size;
+};
+
 typedef struct ResponseData
 {
-    int debug;
-    char *uid;
-    char *response_header;
-    char *response_body;
+    int Debug;
+    char *Uid;
+    char *Response_header;
+    char *Response_body;
+    struct memory Resp_header;
+    struct memory Resp_body;
     // time_t before_connect_time; //long int
-    long long before_connect_time_microsec;
-    long long after_response_time_microsec;
-    long long connected_at_microsec;
-    long long first_byte_at_microsec;
-    long long finish_at_microsec;
-    long connect_time_microsec;
-    long time_to_first_byte_microsec;
-    long total_time_from_curl_microsec;
-    long total_time_microsec;
-    int status_code;
-    int err_code;
+    long long Before_connect_time_microsec;
+    long long After_response_time_microsec;
+    long long Connected_at_microsec;
+    long long First_byte_at_microsec;
+    long long Finish_at_microsec;
+    long Connect_time_microsec;
+    long Time_to_first_byte_microsec;
+    long Total_time_from_curl_microsec;
+    long Total_time_microsec;
+    int Status_code;
+    int Err_code;
 } response_data;
+
 
 typedef struct ThreadPoolData
 {
@@ -88,11 +98,6 @@ typedef struct ThreadPoolData
     bool full_index;
 } thread_pool_data;
 
-struct memory
-{
-    char *data;
-    size_t size;
-};
 
 typedef struct BytesType
 {
@@ -115,6 +120,7 @@ extern "C"
 {
 #endif
 
+    char* thread_data_to_json(response_data response_ref_ptr,int length);
     void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug);
 
 #ifdef __cplusplus

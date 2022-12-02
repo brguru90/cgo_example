@@ -1,6 +1,7 @@
-package c_modules;
+package c_modules
 
 /*
+#cgo CXXFLAGS: -std=gnu++17
 #cgo linux pkg-config: libcurl
 #cgo linux pkg-config: libuv
 #cgo darwin LDFLAGS: -lcurl
@@ -15,11 +16,14 @@ import "C"
 import (
 	"bufio"
 	"bytes"
+	// "encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"net/http"
+	"os"
+	"reflect"
 	"strconv"
 
 	// "strconv"
@@ -27,7 +31,31 @@ import (
 	"unsafe"
 )
 
+func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData{
+	var list []C.struct_ResponseData
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
+	sliceHeader.Cap = len
+	sliceHeader.Len = len
+	sliceHeader.Data = uintptr(unsafe.Pointer(array))
+	return list
+}
 
+//export thread_data_to_json
+func thread_data_to_json(td C.struct_ResponseData,_len C.int) *C.char  {
+	// println("Response_body=",C.GoString(td.Response_body))
+	td_arr:=carray2slice(&td,int(_len))
+	for _,td_item :=range td_arr{
+		println("Response_body=>",C.GoString(td_item.Response_body),"<=")
+		// td_item.Resp_body=C.CString(C.GoString(td_item.Resp_body))
+	}
+	// _json_bytes,err := json.Marshal(td)
+	// if err!=nil{
+	// 	return  C.CString("")
+	// }
+	// fmt.Println(string(_json_bytes))
+	// return  C.CString(string(_json_bytes))
+	return  C.CString("")
+}
 
 func check_error(err error) {
 	if err != nil {
@@ -108,13 +136,16 @@ func Call_api() {
 	ram_size_in_GB := float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE)) / (1024 * 1024)
 	nor_of_thread := math.Ceil(ram_size_in_GB / 70)
 	fmt.Println("Nor of threads", nor_of_thread)
-	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(nor_of_thread), 0)
+
+	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(2), 0)
 
 
 	for i = 0; i < total_requests; i++ {
 		// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
-		fmt.Println(int(bulk_response_data[i].status_code))
+		fmt.Println("status=",int(bulk_response_data[i].Status_code))
 	}
+
+	println("PIS=",os.Getegid())
 
 
 	// for i = 0; i < total_requests; i++ {
@@ -130,3 +161,4 @@ func Call_api() {
 	// body2, err := ioutil.ReadAll(resp.Body)
 	// fmt.Println(string(body2), err)
 }
+
