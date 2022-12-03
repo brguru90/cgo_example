@@ -111,7 +111,9 @@ typedef struct StringType
     long length;
 } string_type;
 
-
+// void * ptr_at(void **ptr, int idx) {
+//     return ptr[idx];
+// }
 
 
 

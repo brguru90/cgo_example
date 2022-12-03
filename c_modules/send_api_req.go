@@ -23,7 +23,7 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"reflect"
+	// "reflect"
 	"strconv"
 
 	// "strconv"
@@ -31,30 +31,39 @@ import (
 	"unsafe"
 )
 
-func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData{
-	var list []C.struct_ResponseData
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
-	sliceHeader.Cap = len
-	sliceHeader.Len = len
-	sliceHeader.Data = uintptr(unsafe.Pointer(array))
-	return list
+func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData {
+	// var list []C.struct_ResponseData
+	// sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
+	// sliceHeader.Cap = len
+	// sliceHeader.Len = len
+	// sliceHeader.Data = uintptr(unsafe.Pointer(array))
+	// return list
+	var i int
+	for i = 0; i < len; i++ {
+		p:=(*C.struct_ResponseData)(unsafe.Pointer(uintptr(unsafe.Pointer(array))+(uintptr(i)*unsafe.Sizeof(C.struct_ResponseData{}))))
+		println("Response_body2=>", C.GoString(p.Response_body), "<=")
+	}
+	return (*[1 << 30]C.struct_ResponseData)(unsafe.Pointer(array))[:len:len]
+
 }
 
 //export thread_data_to_json
-func thread_data_to_json(td C.struct_ResponseData,_len C.int) *C.char  {
+func thread_data_to_json(td C.struct_ResponseData, _len C.int) *C.char {
 	// println("Response_body=",C.GoString(td.Response_body))
-	td_arr:=carray2slice(&td,int(_len))
-	for _,td_item :=range td_arr{
-		println("Response_body=>",C.GoString(td_item.Response_body),"<=")
-		// td_item.Resp_body=C.CString(C.GoString(td_item.Resp_body))
-	}
+	carray2slice(&td, int(_len))
+	// td_arr := carray2slice(&td, int(_len))
+	// for _, td_item := range td_arr {
+	// 	println("Response_body=>", C.GoString(td_item.Response_body), "<=")
+	// 	println("Response_status=>", int(td_item.Status_code), "<=")
+	// 	// td_item.Resp_body=C.CString(C.GoString(td_item.Resp_body))
+	// }
 	// _json_bytes,err := json.Marshal(td)
 	// if err!=nil{
 	// 	return  C.CString("")
 	// }
 	// fmt.Println(string(_json_bytes))
 	// return  C.CString(string(_json_bytes))
-	return  C.CString("")
+	return C.CString("")
 }
 
 func check_error(err error) {
@@ -89,7 +98,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func Call_api() {
-	total_requests := 2
+	total_requests := 3
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://localhost:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
@@ -122,7 +131,7 @@ func Call_api() {
 
 	for i = 0; i < total_requests; i++ {
 		request_input[i] = C.struct_SingleRequestInput{
-			url:         C.CString("http://localhost:8000/api/test/"+strconv.Itoa(i)),
+			url: C.CString("http://localhost:8000/api/test/" + strconv.Itoa(i)),
 			// url:         C.CString(req.URL.String()),
 			method:      C.CString(req.Method),
 			headers:     (*C.struct_Headers)(c_headers),
@@ -135,18 +144,16 @@ func Call_api() {
 	bulk_response_data := make([]C.struct_ResponseData, total_requests)
 	ram_size_in_GB := float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE)) / (1024 * 1024)
 	nor_of_thread := math.Ceil(ram_size_in_GB / 70)
-	fmt.Println("Nor of threads", nor_of_thread)
+	fmt.Println("go Nor of threads", nor_of_thread)
 
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(2), 0)
 
-
 	for i = 0; i < total_requests; i++ {
 		// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
-		fmt.Println("status=",int(bulk_response_data[i].Status_code))
+		fmt.Println("status=", int(bulk_response_data[i].Status_code))
 	}
 
-	println("PIS=",os.Getegid())
-
+	println("PIS=", os.Getegid())
 
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
@@ -161,4 +168,3 @@ func Call_api() {
 	// body2, err := ioutil.ReadAll(resp.Body)
 	// fmt.Println(string(body2), err)
 }
-

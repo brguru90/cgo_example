@@ -335,7 +335,7 @@ void update_response_data(int thread_size, response_data *response_ref)
     auto lamda = [&](StringType *raw_response) -> void
     {
         raw_response->length = raw_response->length - strlen(end_of_data);
-        printf("\n\nfinal data from IPC->%d,%s\n", raw_response->length, raw_response->ch);
+        printf("\n\nfinal data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
         for (int l = 0; l < raw_response->length; l++)
             printf("%02X ", raw_response->ch[l]);
         printf("\n");
@@ -373,9 +373,14 @@ void *run_update_response_data(void *data)
     return NULL;
 }
 
-typedef void(*set_thread_data_type)(thread_data);
 
-void create_process(int thread_size,thread_data *threads_data,thread_pool_data proc_data[],set_thread_data_type set_thread_data){
+void create_process(int thread_size,thread_data *threads_data,thread_pool_data proc_data[]){
+    if (curl_global_init(CURL_GLOBAL_ALL))
+    {
+        printf("Could not init curl\n");
+        return;
+    }
+
     for (int p = 0; p < thread_size; p++)
     {
         int temp_pid;
@@ -388,16 +393,16 @@ void create_process(int thread_size,thread_data *threads_data,thread_pool_data p
             }
             loop_on_the_thread((void *)&threads_data[p]);
             thread_data td = (thread_data)threads_data[p];
-            int start = td.th_pool_data.start_index;
-            int end = td.th_pool_data.end_index;
-            response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
-            for(int k=start;k<=end;k++){
-                td_arr[k]=td.response_ref_ptr[k];
-                printf("status_code=%s\n",td.response_ref_ptr[k].Response_body);
-            }
+            // int start = td.th_pool_data.start_index;
+            // int end = td.th_pool_data.end_index;
+            // response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
+            // for(int k=start;k<=end;k++){
+            //     td_arr[k]=td.response_ref_ptr[k];
+            //     // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
+            //     printf("Response_body=>%s\n",td_arr[k].Response_body);
+            // }
 
-
-            thread_data_to_json(*td_arr,end-start+1);
+            // // thread_data_to_json(*td_arr,end-start+1);
             printf("td=%d\n", td.thread_id);
             // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
 
@@ -411,7 +416,6 @@ void create_process(int thread_size,thread_data *threads_data,thread_pool_data p
 
             // response_data_to_json(td);
             // send_data(td);
-            // set_thread_data(td);
             exit(0);
         }
     }
@@ -422,31 +426,6 @@ void create_process(int thread_size,thread_data *threads_data,thread_pool_data p
     }
 }
 
-
-struct Closure_set_thread_data
-{
-    template <typename Any, typename RETURN_TYPE>
-    static Any lambda_ptr_exec(thread_data td)
-    {
-        return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(td);
-    }
-
-    template <typename Any = void, typename CALLER_TYPE = Any (*)(thread_data td), typename RETURN_TYPE>
-    static CALLER_TYPE create(RETURN_TYPE &t)
-    {
-        callback<RETURN_TYPE>(&t);
-        return (CALLER_TYPE)lambda_ptr_exec<Any, RETURN_TYPE>;
-    }
-
-    template <typename T>
-    static void *callback(void *new_callback = nullptr)
-    {
-        static void *callback;
-        if (new_callback != nullptr)
-            callback = new_callback;
-        return callback;
-    }
-};
 
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
 {
@@ -499,23 +478,9 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].api_req_async_on_thread = new api_req_async(i, &lock);
     }
 
-    auto set_thread_data=[&](thread_data td){
-
-        // printf("lamda pid=%d\n",getpid());
-        int start=td.th_pool_data.start_index;
-        int end=td.th_pool_data.end_index;
-        // printf("start=%d,end=%d\n",start,end);
-        for(int i=start;i<=end;i++){
-            // printf("s=%d\n",td.response_ref_ptr[i].status_code);
-            response_ref[i]=td.response_ref_ptr[i];
-        }
-
-    };
-
-    auto set_thread_data_with_context = Closure_set_thread_data::create<void>(set_thread_data);
 
 
-    create_process(thread_size,threads_data,proc_data,set_thread_data_with_context);
+    create_process(thread_size,threads_data,proc_data);
     printf("pid=%d\n",getpid());
     pthread_cancel(thread);
     close(*receive_data_sockfd);

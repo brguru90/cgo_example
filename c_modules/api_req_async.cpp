@@ -10,7 +10,7 @@ long long get_current_time()
     return (((long long)tv.tv_sec) * 1e6) + (tv.tv_usec);
 }
 
-map<long, api_req_async *> threadid_class_map;
+map<volatile long,volatile api_req_async *> threadid_class_map;
 
 struct Closure_handle_socket
 {
@@ -67,6 +67,9 @@ api_req_async::api_req_async(int th_id, pthread_mutex_t *_lock)
     // printf("api_req_async=%d\n",th_id);
     lock = _lock;
     thread_id = th_id;
+    loop = uv_loop_new();
+    uv_timer_init(loop, &timeout);
+    curl_handle = curl_multi_init();
     // loop = uv_default_loop();
     // loop = uv_loop_new();
     // printf("loop=%d\n", loop);
@@ -118,23 +121,14 @@ void *api_req_async::run(void *data)
     this->data = data;
     this->on_timeout_ptr = &api_req_async::on_timeout;
 
-    loop = uv_loop_new();
     loop_addrs_int = (long)loop;
     // printf("loop=%ld\n", loop_addrs_int);
     pthread_mutex_lock(lock);
     threadid_class_map[loop_addrs_int] = this;
     pthread_mutex_unlock(lock);
 
-    if (curl_global_init(CURL_GLOBAL_ALL))
-    {
-        printf("Could not init curl\n");
-        loop = NULL;
-        return NULL;
-    }
 
-    uv_timer_init(loop, &timeout);
-
-    curl_handle = curl_multi_init();
+    // curl_handle = curl_multi_init();
 
     auto handle_socket_with_context = [=](CURL *easy, curl_socket_t s, int action, void *userp, void *socketp) -> int
     {
@@ -247,6 +241,7 @@ void api_req_async::on_timeout(uv_timer_t *req)
     // printf("on_timeout-thread_id=%d curl_handle=%p\n",thread_id,curl_handle);
     int running_handles;
     CURLMcode res;
+    printf("curl_handle=%d,loop=%d,timeout=%d\n",curl_handle,loop,timeout);
     res = curl_multi_socket_action(curl_handle, CURL_SOCKET_TIMEOUT, 0,
                                    &running_handles);
     on_request_complete();
@@ -281,13 +276,15 @@ int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
 {
     // printf("timeout_ms->%ld,%ln\n", timeout_ms,&timeout_ms);
 
+    pthread_mutex_lock(lock);
     threadid_class_map[loop_addrs_int] = this;
+    pthread_mutex_unlock(lock);
     // printf("on_timeout_ptr=%ld,%d,%p\n", loop_addrs_int, thread_id, threadid_class_map[loop_addrs_int]);
     // // printf("on_timeout-%d curl_handle=%d,%p\n",(long)thread_id,this->curl_handle,this);
     auto on_timeout_with_context = [=](uv_timer_t *req)
     {
         // printf("on_timeout_ptr2=%ld\n", (long)req->data);
-        api_req_async *_this = threadid_class_map[(long)req->loop];
+         api_req_async *_this = (api_req_async *)threadid_class_map[(long)req->loop];
         // printf("on_timeout2-%d,%p\n", _this->thread_id, _this);
         return _this->on_timeout(req);
     };
@@ -419,7 +416,6 @@ void api_req_async::add_request_to_event_loop(request_input *req_input, response
         }
         printf("body=>%s\n\n", req_input->body);
     }
-
     CURL *curl;
     curl = curl_easy_init();
     struct curl_slist *header_list = NULL;
@@ -447,8 +443,8 @@ void api_req_async::add_request_to_event_loop(request_input *req_input, response
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, req_input->time_out_in_sec);
 
     // struct memory body = {0}, header = {0};
-    response_ref->Resp_header={0};
-    response_ref->Resp_body={0};
+    response_ref->Resp_header = {0};
+    response_ref->Resp_body = {0};
     // from response
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, response_writer);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&response_ref->Resp_body);
@@ -522,8 +518,8 @@ void api_req_async::on_request_complete()
             response_ref->First_byte_at_microsec = response_ref->Before_connect_time_microsec + start;
             response_ref->Finish_at_microsec = response_ref->Before_connect_time_microsec + response_ref->Total_time_microsec;
 
-            response_ref->Response_header=response_ref->Resp_header.data;
-            response_ref->Response_body=response_ref->Resp_body.data;
+            response_ref->Response_header = response_ref->Resp_header.data;
+            response_ref->Response_body = response_ref->Resp_body.data;
 
             if (response_ref->Debug > 2)
             {
@@ -532,7 +528,7 @@ void api_req_async::on_request_complete()
             }
             if (response_ref->Debug > 3)
             {
-                printf("%s\n%s\n", response_ref->Response_header,response_ref->Response_body);
+                printf("%s\n%s\n", response_ref->Response_header, response_ref->Response_body);
             }
 
             curl_multi_remove_handle(curl_handle, easy_handle);
