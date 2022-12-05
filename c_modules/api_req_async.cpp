@@ -150,7 +150,7 @@ void *api_req_async::run(void *data)
         add_request_to_event_loop(&(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
     }
     uv_run(loop, UV_RUN_DEFAULT);
-    printf("total_response_collected=%d\n", total_response_collected);
+    // printf("total_response_collected=%d\n", total_response_collected);
     // printf("\ncleanup....\n");
     // while (total_response_collected < (td->th_pool_data.end_index - td->th_pool_data.start_index + 1))
     // {
@@ -158,7 +158,7 @@ void *api_req_async::run(void *data)
     //     sleep(1);
     // }
 
-    printf("\ncleanup2....\n");
+    // printf("\ncleanup2....\n");
     curl_multi_cleanup(curl_handle);
     return NULL;
 }

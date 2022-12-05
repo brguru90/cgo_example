@@ -381,7 +381,7 @@ uv_loop_t *main_loop;
 uv_process_t child_req;
 uv_process_options_t options;
 
-void create_process(int thread_size, uv_thread_t *threads, thread_data *threads_data, thread_pool_data proc_data[])
+void create_process(int thread_size, int total_requests,uv_thread_t *threads, thread_data *threads_data, thread_pool_data proc_data[])
 {
 
     // main_loop = uv_default_loop();
@@ -466,15 +466,15 @@ void create_process(int thread_size, uv_thread_t *threads, thread_data *threads_
             thread_data td = (thread_data)threads_data[p];
             int start = td.th_pool_data.start_index;
             int end = td.th_pool_data.end_index;
-            response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
+            response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(total_requests));
             for(int k=start;k<=end;k++){
-                // td_arr[k]=td.response_ref_ptr[k];
+                td_arr[k]=td.response_ref_ptr[k];
                 printf("thread=%d,Status_code=>%d\n",td.thread_id,td.response_ref_ptr[k].Status_code);
                 // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
                 // printf("Response_body=>%s\n",td_arr[k].Response_body);
             }
-
-            // // thread_data_to_json(*td_arr,end-start+1);
+            // printf("len=%d\n",total_requests);
+            thread_data_to_json(*td_arr,total_requests);
             // printf("td=%d\n", td.thread_id);
             // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
 
@@ -549,7 +549,7 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].api_req_async_on_thread = new api_req_async(i, &lock, curl_multi_init());
     }
 
-    create_process(thread_size, threads, threads_data, proc_data);
+    create_process(thread_size, total_requests,threads, threads_data, proc_data);
     // printf("pid=%d\n", getpid());
     pthread_cancel(thread);
     close(*receive_data_sockfd);

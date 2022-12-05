@@ -16,12 +16,15 @@ import "C"
 import (
 	"bufio"
 	"bytes"
+	"reflect"
+
 	// "encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"net/http"
+
 	// "reflect"
 	"strconv"
 
@@ -31,31 +34,34 @@ import (
 )
 
 func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData {
-	// var list []C.struct_ResponseData
-	// sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
-	// sliceHeader.Cap = len
-	// sliceHeader.Len = len
-	// sliceHeader.Data = uintptr(unsafe.Pointer(array))
-	// return list
+
 	var i int
 	for i = 0; i < len; i++ {
 		p:=(*C.struct_ResponseData)(unsafe.Pointer(uintptr(unsafe.Pointer(array))+(uintptr(i)*unsafe.Sizeof(C.struct_ResponseData{}))))
 		println("Response_body2=>", C.GoString(p.Response_body), "<=")
 	}
-	return (*[1 << 30]C.struct_ResponseData)(unsafe.Pointer(array))[:len:len]
+
+	var list []C.struct_ResponseData
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
+	sliceHeader.Cap = len
+	sliceHeader.Len = len
+	sliceHeader.Data = uintptr(unsafe.Pointer(array))
+	return list	
+	// return (*[1 << 30]C.struct_ResponseData)(unsafe.Pointer(array))[:len:len]
 
 }
 
 //export thread_data_to_json
 func thread_data_to_json(td C.struct_ResponseData, _len C.int) *C.char {
 	// println("Response_body=",C.GoString(td.Response_body))
-	carray2slice(&td, int(_len))
-	// td_arr := carray2slice(&td, int(_len))
-	// for _, td_item := range td_arr {
-	// 	println("Response_body=>", C.GoString(td_item.Response_body), "<=")
-	// 	println("Response_status=>", int(td_item.Status_code), "<=")
-	// 	// td_item.Resp_body=C.CString(C.GoString(td_item.Resp_body))
-	// }
+	// carray2slice(&td, int(_len))
+	// println("len=",int(_len))
+	td_arr := carray2slice(&td, int(_len))
+	for _, td_item := range td_arr {
+		println("Response_body=>", C.GoString(td_item.Response_body), "<=")
+		println("Response_status=>", int(td_item.Status_code), "<=")
+		// td_item.Resp_body=C.CString(C.GoString(td_item.Resp_body))
+	}
 	// _json_bytes,err := json.Marshal(td)
 	// if err!=nil{
 	// 	return  C.CString("")
@@ -97,7 +103,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func Call_api() {
-	total_requests := 10
+	total_requests := 2
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://localhost:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
