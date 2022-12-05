@@ -150,6 +150,15 @@ void *api_req_async::run(void *data)
         add_request_to_event_loop(&(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
     }
     uv_run(loop, UV_RUN_DEFAULT);
+    printf("total_response_collected=%d\n", total_response_collected);
+    // printf("\ncleanup....\n");
+    // while (total_response_collected < (td->th_pool_data.end_index - td->th_pool_data.start_index + 1))
+    // {
+    //     printf("total_response_collected=%d\n",total_response_collected);
+    //     sleep(1);
+    // }
+
+    printf("\ncleanup2....\n");
     curl_multi_cleanup(curl_handle);
     return NULL;
 }
@@ -236,7 +245,7 @@ void api_req_async::on_timeout(uv_timer_t *req)
     // printf("on_timeout-thread_id=%d curl_handle=%p\n",thread_id,curl_handle);
     int running_handles;
     CURLMcode res;
-    printf("on_timeout curl_handle %ld\n", (long)curl_handle);
+    // printf("on_timeout curl_handle %ld\n", (long)curl_handle);
     res = curl_multi_socket_action(curl_handle, CURL_SOCKET_TIMEOUT, 0,
                                    &running_handles);
     on_request_complete();
@@ -278,14 +287,20 @@ int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
 
     // printf("on_timeout_ptr=%ld,%d,%p\n", loop_addrs_int, thread_id, threadid_class_map[loop_addrs_int]);
     // // printf("on_timeout-%d curl_handle=%d,%p\n",(long)thread_id,this->curl_handle,this);
-    auto on_timeout_with_context = [=](uv_timer_t *req)
+    auto on_timeout_with_context = [&](uv_timer_t *req)
     {
         // printf("on_timeout_ptr2=%ld\n", (long)req->data);
         api_req_async *_this = (api_req_async *)threadid_class_map[(long)req->loop];
         // printf("on_timeout2-%d,%p\n", _this->thread_id, _this);
-        if ((long)loop == -1)
+        // printf("on_timeout curl_handle %ld,loop=%ld\n", (long)curl_handle, (long)loop);
+        // if ((long)loop == 0)
+        // {
+        //     uv_timer_stop(&timeout);
+        // }
+        // printf("start_timeout curl_handle %ld,loop_int %ld, loop=%ld\n", (long)curl_handle, loop_addrs_int, (long)loop);
+        if ((long)loop <= -1)
         {
-            uv_timer_stop(&timeout);
+            // only allow if loop is valid pointer & memory is not freed
             return;
         }
         return _this->on_timeout(req);
@@ -336,16 +351,13 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
                                  void *socketp)
 {
 
-    printf("handle_socket curl_handle %ld,loop=%ld\n", (long)curl_handle, (long)loop);
-    // printf("handle_socket\n");
-    auto curl_perform_with_context = [=](uv_poll_t *req, int status, int events)
+    // printf("handle_socket curl_handle %ld,loop=%ld\n", (long)curl_handle, (long)loop);
+    auto curl_perform_with_context = [&](uv_poll_t *req, int status, int events)
     {
-        // printf("curl_perform curl_handle %ld,loop=%ld\n", (long)curl_handle, (long)loop);
-        if ((long)loop == -1)
+        // printf("curl_perform curl_handle %ld,loop_int %ld, loop=%ld\n", (long)curl_handle, loop_addrs_int, (long)loop);
+        if ((long)loop <= -1 ||  (long)loop!=loop_addrs_int)
         {
-            uv_poll_stop(&((curl_context_t *)socketp)->poll_handle);
-            destroy_curl_context((curl_context_t *)socketp);
-            curl_multi_assign(curl_handle, s, NULL);
+            // only allow if loop is valid pointer & memory is not freed or address is unchanged
             return;
         }
         return curl_perform(req, status, events);
@@ -543,9 +555,9 @@ void api_req_async::on_request_complete()
                 printf("%s\n%s\n", response_ref->Response_header, response_ref->Response_body);
             }
 
+            total_response_collected++;
             curl_multi_remove_handle(curl_handle, easy_handle);
             curl_easy_cleanup(easy_handle);
-
             break;
         }
 

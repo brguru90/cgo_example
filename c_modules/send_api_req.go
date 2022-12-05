@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
-	"os"
 	// "reflect"
 	"strconv"
 
@@ -98,7 +97,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func Call_api() {
-	total_requests := 4
+	total_requests := 10
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://localhost:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
@@ -148,13 +147,10 @@ func Call_api() {
 
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(2), 0)
 
-	for i = 0; i < total_requests; i++ {
-		// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
-		fmt.Println("status=", int(bulk_response_data[i].Status_code))
-	}
-
-	println("PIS=", os.Getegid())
-
+	// for i = 0; i < total_requests; i++ {
+	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
+	// 	fmt.Println("status=", int(bulk_response_data[i].Status_code))
+	// }
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
 	// 	fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))

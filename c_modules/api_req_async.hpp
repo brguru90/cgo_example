@@ -12,6 +12,7 @@ private:
     CURLM *curl_handle = nullptr;
     uv_timer_t timeout;
     pthread_mutex_t *lock;
+    int total_response_collected=0;
     void add_request_to_event_loop(request_input *req_input, response_data *response_ref, int debug);
     void on_request_complete();
     curl_context_t *create_curl_context(curl_socket_t sockfd);

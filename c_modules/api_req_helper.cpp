@@ -426,8 +426,8 @@ void create_process(int thread_size, uv_thread_t *threads, thread_data *threads_
     //         int end = td.th_pool_data.end_index;
     //         response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
     //         for(int k=start;k<=end;k++){
-    //             td_arr[k]=td.response_ref_ptr[k];
-    //             printf("Status_code=>%d\n",td_arr[k].Status_code);
+    //             // td_arr[k]=td.response_ref_ptr[k];
+    //             printf("thread=%d,Status_code=>%d\n",td.thread_id,td.response_ref_ptr[k].Status_code);
     //             // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
     //             // printf("Response_body=>%s\n",td_arr[k].Response_body);
     //         }
@@ -452,26 +452,6 @@ void create_process(int thread_size, uv_thread_t *threads, thread_data *threads_
 
     // uv_run(main_loop, UV_RUN_DEFAULT);
 
-    // for (int p = 0; p < thread_size; p++)
-    // {
-    //     uv_thread_create(&threads[p], loop_on_the_thread, (void *)&threads_data[p]);
-    // }
-    // for (int p = 0; p < thread_size; p++)
-    // {
-    //     uv_thread_join(&threads[p]);
-    //     thread_data td = (thread_data)threads_data[p];
-    //     int start = td.th_pool_data.start_index;
-    //     int end = td.th_pool_data.end_index;
-    //     response_data *td_arr = (response_data *)malloc(sizeof(response_data) * (end - start + 1));
-    //     // for(int k=start;k<=end;k++){
-    //     //     td_arr[k]=td.response_ref_ptr[k];
-    //     //     printf("Status_code=>%d\n",td_arr[k].Status_code);
-    //     //     // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
-    //     //     printf("Response_body=>%s\n",td_arr[k].Response_body);
-    //     // }
-
-    // }
-
     for (int p = 0; p < thread_size; p++)
     {
         int temp_pid;
@@ -488,8 +468,8 @@ void create_process(int thread_size, uv_thread_t *threads, thread_data *threads_
             int end = td.th_pool_data.end_index;
             response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
             for(int k=start;k<=end;k++){
-                td_arr[k]=td.response_ref_ptr[k];
-                printf("Status_code=>%d\n",td_arr[k].Status_code);
+                // td_arr[k]=td.response_ref_ptr[k];
+                printf("thread=%d,Status_code=>%d\n",td.thread_id,td.response_ref_ptr[k].Status_code);
                 // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
                 // printf("Response_body=>%s\n",td_arr[k].Response_body);
             }
@@ -570,7 +550,7 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     }
 
     create_process(thread_size, threads, threads_data, proc_data);
-    printf("pid=%d\n", getpid());
+    // printf("pid=%d\n", getpid());
     pthread_cancel(thread);
     close(*receive_data_sockfd);
 
