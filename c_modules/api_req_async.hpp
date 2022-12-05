@@ -25,7 +25,7 @@ public:
     int thread_id = -1;
     long loop_addrs_int;
     void on_timeout(uv_timer_t *req);
-    api_req_async(int th_id, pthread_mutex_t *_lock);
+    api_req_async(int th_id, pthread_mutex_t *_lock, CURLM * multi_handler);
     ~api_req_async();
     void *run(void *data);
     void* get_result();

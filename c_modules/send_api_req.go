@@ -98,7 +98,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func Call_api() {
-	total_requests := 3
+	total_requests := 4
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://localhost:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"

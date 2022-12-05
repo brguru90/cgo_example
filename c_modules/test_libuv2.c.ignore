@@ -147,7 +147,7 @@ int main()
         }
         else
         {
-            fprintf(stderr, "Launched process with ID %d\n", child_req.pid);
+            fprintf(stderr, "Launched process with ID %d,main_loop=%d\n", child_req.pid,main_loop);
             run_process();
         }
         fprintf(stderr, "Started worker %d\n", worker->req.pid);

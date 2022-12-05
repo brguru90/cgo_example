@@ -3,6 +3,8 @@
 
 using namespace std;
 
+volatile bool curl_running = false;
+
 long long get_current_time()
 {
     struct timeval tv;
@@ -10,7 +12,7 @@ long long get_current_time()
     return (((long long)tv.tv_sec) * 1e6) + (tv.tv_usec);
 }
 
-map<volatile long,volatile api_req_async *> threadid_class_map;
+map<volatile long, volatile api_req_async *> threadid_class_map;
 
 struct Closure_handle_socket
 {
@@ -62,49 +64,30 @@ struct Closure_start_timeout
     }
 };
 
-api_req_async::api_req_async(int th_id, pthread_mutex_t *_lock)
+uv_loop_t *create_loop()
+{
+    uv_loop_t *loop = (uv_loop_t *)malloc(sizeof(uv_loop_t));
+    if (loop)
+    {
+        uv_loop_init(loop);
+    }
+    return loop;
+}
+
+api_req_async::api_req_async(int th_id, pthread_mutex_t *_lock, CURLM *multi_handler)
 {
     // printf("api_req_async=%d\n",th_id);
     lock = _lock;
     thread_id = th_id;
+    curl_handle = multi_handler;
     loop = uv_loop_new();
-    uv_timer_init(loop, &timeout);
-    curl_handle = curl_multi_init();
-    // loop = uv_default_loop();
-    // loop = uv_loop_new();
-    // printf("loop=%d\n", loop);
-
-    // if (curl_global_init(CURL_GLOBAL_ALL))
-    // {
-    //     fprintf(stderr, "Could not init curl\n");
-    //     loop = NULL;
-    //     return;
-    // }
-
-    // uv_timer_init(loop, &timeout);
-
-    // curl_handle = curl_multi_init();
-
-    // auto handle_socket_with_context = [=](CURL *easy, curl_socket_t s, int action, void *userp, void *socketp) -> int
-    // {
-    //     return handle_socket(easy, s, action, userp, socketp);
-    // };
-    // auto _closure_handle_socket = Closure_handle_socket::create<int>(handle_socket_with_context);
-    // auto start_timeout_with_context = [=](CURLM *multi, long timeout_ms, void *userp) -> int
-    // {
-    //     return start_timeout(multi, timeout_ms, userp);
-    // };
-    // auto _closure_start_timeout = Closure_start_timeout::create<int>(start_timeout_with_context);
-
-    // curl_multi_setopt(curl_handle, CURLMOPT_SOCKETFUNCTION, _closure_handle_socket);
-    // curl_multi_setopt(curl_handle, CURLMOPT_TIMERFUNCTION, _closure_start_timeout);
 }
 
 api_req_async::~api_req_async()
 {
     // uv_loop_delete(loop);
-    free(loop);
-    free(curl_handle);
+    // free(loop);
+    // free(curl_handle);
 }
 
 void *api_req_async::get_result()
@@ -117,6 +100,19 @@ void *api_req_async::get_result()
 
 void *api_req_async::run(void *data)
 {
+    // loop = create_loop();
+    // loop = uv_loop_new();
+    uv_timer_init(loop, &timeout);
+
+    // curl_global_cleanup();
+    if (curl_global_init(CURL_GLOBAL_ALL))
+    {
+        fprintf(stderr, "Could not init curl\n");
+        loop = NULL;
+        return NULL;
+    }
+
+    printf("1-curl_handle=%ld,loop-%ld\n", (long)curl_handle, (long)loop);
 
     this->data = data;
     this->on_timeout_ptr = &api_req_async::on_timeout;
@@ -126,7 +122,6 @@ void *api_req_async::run(void *data)
     pthread_mutex_lock(lock);
     threadid_class_map[loop_addrs_int] = this;
     pthread_mutex_unlock(lock);
-
 
     // curl_handle = curl_multi_init();
 
@@ -230,18 +225,18 @@ void api_req_async::curl_perform(uv_poll_t *req, int status, int events)
 
     res = curl_multi_socket_action(curl_handle, context->sockfd, flags,
                                    &running_handles);
-
     on_request_complete();
 }
 
 void api_req_async::on_timeout(uv_timer_t *req)
 {
+
     // printf("---on_timeout---\n");
     // printf("on_timeout-thread_id=%d\n", thread_id);
     // printf("on_timeout-thread_id=%d curl_handle=%p\n",thread_id,curl_handle);
     int running_handles;
     CURLMcode res;
-    printf("curl_handle=%d,loop=%d,timeout=%d\n",curl_handle,loop,timeout);
+    printf("on_timeout curl_handle %ld\n", (long)curl_handle);
     res = curl_multi_socket_action(curl_handle, CURL_SOCKET_TIMEOUT, 0,
                                    &running_handles);
     on_request_complete();
@@ -279,13 +274,20 @@ int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
     pthread_mutex_lock(lock);
     threadid_class_map[loop_addrs_int] = this;
     pthread_mutex_unlock(lock);
+    loop->data = curl_handle;
+
     // printf("on_timeout_ptr=%ld,%d,%p\n", loop_addrs_int, thread_id, threadid_class_map[loop_addrs_int]);
     // // printf("on_timeout-%d curl_handle=%d,%p\n",(long)thread_id,this->curl_handle,this);
     auto on_timeout_with_context = [=](uv_timer_t *req)
     {
         // printf("on_timeout_ptr2=%ld\n", (long)req->data);
-         api_req_async *_this = (api_req_async *)threadid_class_map[(long)req->loop];
+        api_req_async *_this = (api_req_async *)threadid_class_map[(long)req->loop];
         // printf("on_timeout2-%d,%p\n", _this->thread_id, _this);
+        if ((long)loop == -1)
+        {
+            uv_timer_stop(&timeout);
+            return;
+        }
         return _this->on_timeout(req);
     };
     auto _on_timeout_with_context = Closure_on_timeout::create<void>(on_timeout_with_context);
@@ -333,9 +335,19 @@ struct Closure_curl_perform
 int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *userp,
                                  void *socketp)
 {
+
+    printf("handle_socket curl_handle %ld,loop=%ld\n", (long)curl_handle, (long)loop);
     // printf("handle_socket\n");
     auto curl_perform_with_context = [=](uv_poll_t *req, int status, int events)
     {
+        // printf("curl_perform curl_handle %ld,loop=%ld\n", (long)curl_handle, (long)loop);
+        if ((long)loop == -1)
+        {
+            uv_poll_stop(&((curl_context_t *)socketp)->poll_handle);
+            destroy_curl_context((curl_context_t *)socketp);
+            curl_multi_assign(curl_handle, s, NULL);
+            return;
+        }
         return curl_perform(req, status, events);
     };
     auto _curl_perform_with_context = Closure_curl_perform::create<void>(curl_perform_with_context);

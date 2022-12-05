@@ -93,7 +93,7 @@ typedef struct ThreadPoolData
 {
     int start_index;
     int end_index;
-    pid_t pid;
+    int pid;
     char *uuid;
     bool full_index;
 } thread_pool_data;

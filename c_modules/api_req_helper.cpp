@@ -25,9 +25,7 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
 // void response_data_to_json(thread_data td)
 // {
 
-
 //     struct_mapping::reg(&headers_type::header, "header");
-
 
 //     struct_mapping::reg(&request_input::body, "body");
 //     struct_mapping::reg(&request_input::cookies, "cookies");
@@ -37,7 +35,6 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
 //     struct_mapping::reg(&request_input::time_out_in_sec, "time_out_in_sec");
 //     struct_mapping::reg(&request_input::uid, "uid");
 //     struct_mapping::reg(&request_input::url, "url");
-
 
 //     struct_mapping::reg(&response_data::after_response_time_microsec, "after_response_time_microsec");
 //     struct_mapping::reg(&response_data::before_connect_time_microsec, "before_connect_time_microsec");
@@ -55,15 +52,11 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
 //     struct_mapping::reg(&response_data::total_time_microsec, "total_time_microsec");
 //     struct_mapping::reg(&response_data::uid, "uid");
 
-
 //     struct_mapping::reg(&thread_pool_data::end_index, "end_index");
 //     struct_mapping::reg(&thread_pool_data::full_index, "full_index");
 //     struct_mapping::reg(&thread_pool_data::pid, "pid");
 //     struct_mapping::reg(&thread_pool_data::start_index, "start_index");
 //     struct_mapping::reg(&thread_pool_data::uuid, "uuid");
-
-
-
 
 //     struct_mapping::reg(&thread_data::req_inputs_ptr, "req_inputs_ptr");
 //     struct_mapping::reg(&thread_data::api_req_async_on_thread, "api_req_async_on_thread");
@@ -71,7 +64,6 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
 //     struct_mapping::reg(&thread_data::response_ref_ptr, "response_ref_ptr");
 //     struct_mapping::reg(&thread_data::th_pool_data, "th_pool_data");
 //     struct_mapping::reg(&thread_data::thread_id, "thread_id");
-
 
 //     std::ostringstream json_data;
 //     struct_mapping::map_struct_to_json(td, json_data, "  ");
@@ -186,7 +178,7 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 {
     int sockfd, connfd, len;
     struct sockaddr_in servaddr, cli;
-    receive_data_sockfd=&sockfd;
+    receive_data_sockfd = &sockfd;
 
     // socket create and verification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -373,13 +365,112 @@ void *run_update_response_data(void *data)
     return NULL;
 }
 
+void on_exit2(uv_process_t *req, int64_t exit_status, int term_signal)
+{
+    fprintf(stderr, "Process exited with status %" PRId64 ", signal %d\n", exit_status, term_signal);
+    uv_close((uv_handle_t *)req, NULL);
+}
+struct child_worker
+{
+    uv_process_t req;
+    uv_process_options_t options;
+    uv_pipe_t pipe;
+} * workers;
 
-void create_process(int thread_size,thread_data *threads_data,thread_pool_data proc_data[]){
-    if (curl_global_init(CURL_GLOBAL_ALL))
-    {
-        printf("Could not init curl\n");
-        return;
-    }
+uv_loop_t *main_loop;
+uv_process_t child_req;
+uv_process_options_t options;
+
+void create_process(int thread_size, uv_thread_t *threads, thread_data *threads_data, thread_pool_data proc_data[])
+{
+
+    // main_loop = uv_default_loop();
+
+    // struct child_worker *workers = (struct child_worker *)calloc(thread_size, sizeof(struct child_worker));
+
+    // for (int p = 0; p < thread_size; p++)
+    // {
+    //     struct child_worker *worker = &workers[p];
+    //     uv_pipe_init(main_loop, &worker->pipe, 1);
+
+    //     char *args[3];
+    //     args[0] = (char*)"mkdir";
+    //     args[1] = (char*)"test-dir";
+    //     args[2] = NULL;
+
+    //     uv_stdio_container_t child_stdio[3];
+    //     child_stdio[0].flags = (uv_stdio_flags)(UV_CREATE_PIPE | UV_READABLE_PIPE);
+    //     child_stdio[0].data.stream = (uv_stream_t *)&worker->pipe;
+    //     child_stdio[1].flags = UV_IGNORE;
+    //     child_stdio[2].flags = UV_INHERIT_FD;
+    //     child_stdio[2].data.fd = 2;
+
+    //     worker->options.stdio = child_stdio;
+    //     worker->options.stdio_count = 3;
+
+    //     worker->options.exit_cb = on_exit2;
+    //     worker->options.file = "mkdir";
+    //     worker->options.args = args;
+
+    //     if ((proc_data[p].pid = uv_spawn(main_loop, &worker->req, &worker->options)) == 0)
+    //     {
+    //         if (proc_data[p].pid)
+    //         {
+    //             printf("failed to create process\n");
+    //             fprintf(stderr, "%s\n", uv_strerror(proc_data[p].pid));
+    //             exit(1);
+    //         }
+    //         loop_on_the_thread((void *)&threads_data[p]);
+    //         thread_data td = (thread_data)threads_data[p];
+    //         int start = td.th_pool_data.start_index;
+    //         int end = td.th_pool_data.end_index;
+    //         response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
+    //         for(int k=start;k<=end;k++){
+    //             td_arr[k]=td.response_ref_ptr[k];
+    //             printf("Status_code=>%d\n",td_arr[k].Status_code);
+    //             // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
+    //             // printf("Response_body=>%s\n",td_arr[k].Response_body);
+    //         }
+
+    //         // // thread_data_to_json(*td_arr,end-start+1);
+    //         printf("td=%d\n", td.thread_id);
+    //         // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
+
+    //         // char bytes[sizeof(td)];
+    //         // memcpy(bytes, &td, sizeof(td));
+
+    //         // printf("data to send1=%s,len=%ld\n", bytes, sizeof(bytes));
+    //         // for (int l = 0; l < sizeof(bytes); l++)
+    //         //     printf("%02X ", bytes[l]);
+    //         // printf("\n");
+
+    //         // response_data_to_json(td);
+    //         // send_data(td);
+    //         // exit(0);
+    //     }
+    // }
+
+    // uv_run(main_loop, UV_RUN_DEFAULT);
+
+    // for (int p = 0; p < thread_size; p++)
+    // {
+    //     uv_thread_create(&threads[p], loop_on_the_thread, (void *)&threads_data[p]);
+    // }
+    // for (int p = 0; p < thread_size; p++)
+    // {
+    //     uv_thread_join(&threads[p]);
+    //     thread_data td = (thread_data)threads_data[p];
+    //     int start = td.th_pool_data.start_index;
+    //     int end = td.th_pool_data.end_index;
+    //     response_data *td_arr = (response_data *)malloc(sizeof(response_data) * (end - start + 1));
+    //     // for(int k=start;k<=end;k++){
+    //     //     td_arr[k]=td.response_ref_ptr[k];
+    //     //     printf("Status_code=>%d\n",td_arr[k].Status_code);
+    //     //     // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
+    //     //     printf("Response_body=>%s\n",td_arr[k].Response_body);
+    //     // }
+
+    // }
 
     for (int p = 0; p < thread_size; p++)
     {
@@ -393,17 +484,18 @@ void create_process(int thread_size,thread_data *threads_data,thread_pool_data p
             }
             loop_on_the_thread((void *)&threads_data[p]);
             thread_data td = (thread_data)threads_data[p];
-            // int start = td.th_pool_data.start_index;
-            // int end = td.th_pool_data.end_index;
-            // response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
-            // for(int k=start;k<=end;k++){
-            //     td_arr[k]=td.response_ref_ptr[k];
-            //     // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
-            //     printf("Response_body=>%s\n",td_arr[k].Response_body);
-            // }
+            int start = td.th_pool_data.start_index;
+            int end = td.th_pool_data.end_index;
+            response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
+            for(int k=start;k<=end;k++){
+                td_arr[k]=td.response_ref_ptr[k];
+                printf("Status_code=>%d\n",td_arr[k].Status_code);
+                // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
+                // printf("Response_body=>%s\n",td_arr[k].Response_body);
+            }
 
             // // thread_data_to_json(*td_arr,end-start+1);
-            printf("td=%d\n", td.thread_id);
+            // printf("td=%d\n", td.thread_id);
             // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
 
             // char bytes[sizeof(td)];
@@ -425,7 +517,6 @@ void create_process(int thread_size,thread_data *threads_data,thread_pool_data p
         wait(NULL);
     }
 }
-
 
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
 {
@@ -451,8 +542,8 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     }
 
     int thread_size = (left_out_work == 0 ? num_of_threads : num_of_threads + 1);
-    printf("thread_size=%d\n",thread_size);
-    pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * thread_size);
+    printf("thread_size=%d\n", thread_size);
+    uv_thread_t *threads = (uv_thread_t *)malloc(sizeof(uv_thread_t) * thread_size);
     thread_data *threads_data = (thread_data *)malloc(sizeof(thread_data) * thread_size);
 
     update_response_data_t th_data;
@@ -475,16 +566,14 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].debug_flag = debug;
         threads_data[i].thread_id = i;
         threads_data[i].th_pool_data = proc_data[i];
-        threads_data[i].api_req_async_on_thread = new api_req_async(i, &lock);
+        threads_data[i].api_req_async_on_thread = new api_req_async(i, &lock, curl_multi_init());
     }
 
-
-
-    create_process(thread_size,threads_data,proc_data);
-    printf("pid=%d\n",getpid());
+    create_process(thread_size, threads, threads_data, proc_data);
+    printf("pid=%d\n", getpid());
     pthread_cancel(thread);
     close(*receive_data_sockfd);
-    
+
     pthread_join(thread, NULL);
 
     printf("\n\n--------- end -----------\n\n");
