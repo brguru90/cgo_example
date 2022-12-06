@@ -1,5 +1,6 @@
 export LD_LIBRARY_PATH=${PWD}
 # export GOFLAGS="-count=1"
+# GODEBUG=cgocheck=0
 
 rm -rf ./*.so ./*.o ./*.a
 # gcc  -static  -Wall curl.c -o libcurl.a  -nostartfiles -g -DCURL_STATICLIB -lssl -lcrypto -lpthread -L$PWD/curl/lib -I$PWD/curl/include 

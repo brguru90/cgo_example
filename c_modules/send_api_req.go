@@ -42,6 +42,12 @@ func check_error(err error) {
 }
 
 func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData {
+	var i int
+	for i = 0; i < len; i++ {
+		p:=(*C.struct_ResponseData)(unsafe.Pointer(uintptr(unsafe.Pointer(array))+(uintptr(i)*(C.sizeof_struct_ResponseData))))
+		println("Response_body2=>", C.GoString(p.Response_body), "<=")
+	}
+
 	// still issue exists
 	var list []C.struct_ResponseData
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
@@ -81,8 +87,8 @@ func thread_data_to_json(td C.struct_ResponseData, _len C.int, start C.int, end 
 	td_arr := carray2slice(&td, int(_len))
 	td_slice := []ResponseDataCMap{}
 
-	for k, td_item := range td_arr {
-		println(k,"serialized Response_body",C.GoString(td_item.Response_body))
+	for _, td_item := range td_arr {
+		// println(k,"serialized Response_body",C.GoString(td_item.Response_body))
 		td_slice = append(td_slice, ResponseDataCMap{
 			Debug:                         int(td_item.Debug),
 			Uid:                           C.GoString(td_item.Uid),
