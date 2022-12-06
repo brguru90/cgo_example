@@ -22,54 +22,6 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
     uv_close((uv_handle_t *)req, NULL);
 }
 
-// void response_data_to_json(thread_data td)
-// {
-
-//     struct_mapping::reg(&headers_type::header, "header");
-
-//     struct_mapping::reg(&request_input::body, "body");
-//     struct_mapping::reg(&request_input::cookies, "cookies");
-//     struct_mapping::reg(&request_input::headers, "headers");
-//     struct_mapping::reg(&request_input::headers_len, "headers_len");
-//     struct_mapping::reg(&request_input::method, "method");
-//     struct_mapping::reg(&request_input::time_out_in_sec, "time_out_in_sec");
-//     struct_mapping::reg(&request_input::uid, "uid");
-//     struct_mapping::reg(&request_input::url, "url");
-
-//     struct_mapping::reg(&response_data::after_response_time_microsec, "after_response_time_microsec");
-//     struct_mapping::reg(&response_data::before_connect_time_microsec, "before_connect_time_microsec");
-//     struct_mapping::reg(&response_data::connect_time_microsec, "connect_time_microsec");
-//     struct_mapping::reg(&response_data::connected_at_microsec, "connected_at_microsec");
-//     struct_mapping::reg(&response_data::debug, "debug");
-//     struct_mapping::reg(&response_data::err_code, "err_code");
-//     struct_mapping::reg(&response_data::finish_at_microsec, "finish_at_microsec");
-//     struct_mapping::reg(&response_data::first_byte_at_microsec, "first_byte_at_microsec");
-//     struct_mapping::reg(&response_data::response_body, "response_body");
-//     struct_mapping::reg(&response_data::response_header, "response_header");
-//     struct_mapping::reg(&response_data::status_code, "status_code");
-//     struct_mapping::reg(&response_data::time_to_first_byte_microsec, "time_to_first_byte_microsec");
-//     struct_mapping::reg(&response_data::total_time_from_curl_microsec, "total_time_from_curl_microsec");
-//     struct_mapping::reg(&response_data::total_time_microsec, "total_time_microsec");
-//     struct_mapping::reg(&response_data::uid, "uid");
-
-//     struct_mapping::reg(&thread_pool_data::end_index, "end_index");
-//     struct_mapping::reg(&thread_pool_data::full_index, "full_index");
-//     struct_mapping::reg(&thread_pool_data::pid, "pid");
-//     struct_mapping::reg(&thread_pool_data::start_index, "start_index");
-//     struct_mapping::reg(&thread_pool_data::uuid, "uuid");
-
-//     struct_mapping::reg(&thread_data::req_inputs_ptr, "req_inputs_ptr");
-//     struct_mapping::reg(&thread_data::api_req_async_on_thread, "api_req_async_on_thread");
-//     struct_mapping::reg(&thread_data::debug_flag, "debug_flag");
-//     struct_mapping::reg(&thread_data::response_ref_ptr, "response_ref_ptr");
-//     struct_mapping::reg(&thread_data::th_pool_data, "th_pool_data");
-//     struct_mapping::reg(&thread_data::thread_id, "thread_id");
-
-//     std::ostringstream json_data;
-//     struct_mapping::map_struct_to_json(td, json_data, "  ");
-//     std::cout << json_data.str() << std::endl;
-// }
-
 void send_data(char* serialized)
 {
     int _size = strlen(serialized) + strlen(end_of_data);
@@ -336,14 +288,15 @@ void update_response_data(int thread_size, response_data *response_ref)
             tmp[i]=raw_response->ch[i];
         }
         // printf("\n\n    final data from IPC->%ld,%s\n", raw_response->length, tmp);
-        response_deserialized_type *response_deserialized=json_to_thread_data(tmp);
-        // printf("response_deserialized len=%d\n",response_deserialized->len);
-        // for (int l = 0; l < raw_response->length; l++)
-        //     printf("%02X ", raw_response->ch[l]);
-        // printf("\n");
-        for(int i=response_deserialized->start;i<=response_deserialized->end;i++){
-            response_ref[i]=response_deserialized->data[i-response_deserialized->start];
-        }
+        // response_deserialized_type *response_deserialized=json_to_thread_data(tmp);
+        // // printf("response_deserialized len=%d\n",response_deserialized->len);
+        // // for (int l = 0; l < raw_response->length; l++)
+        // //     printf("%02X ", raw_response->ch[l]);
+        // // printf("\n");
+        // for(int i=response_deserialized->start;i<=response_deserialized->end;i++){
+        //     printf("c res_data=%s\n",response_deserialized->data[i-response_deserialized->start].Response_body);
+        //     // response_ref[i]=response_deserialized->data[i-response_deserialized->start];
+        // }
     };
     // auto *closure = new std::function<void(StringType *raw_response)>(lamda);
     auto lamda_with_context = Closure_raw_response::create<void>(lamda);
@@ -469,13 +422,13 @@ void create_process(int thread_size, int total_requests,uv_thread_t *threads, th
             for(int k=start;k<=end;k++){
                 int m=k-start;
                 td_arr[m]=td.response_ref_ptr[k];
-                printf("thread=%d,Status_code=>%d\n",td.thread_id,td.response_ref_ptr[k].Status_code);
+                // printf("thread=%d,Status_code=>%d\n",td.thread_id,td.response_ref_ptr[k].Status_code);
                 // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
-                printf("Response_body1=>%s\n",td_arr[m].Response_body);
+                // printf("Response_body1=>%s\n",td_arr[m].Response_body);
             }
             // printf("len=%d\n",total_requests);
             char * serialized=thread_data_to_json(*td_arr,end-start+1,start,end);
-            // printf("serialized=%s\n",serialized);
+            printf("serialized=%s\n",serialized);
             // char bytes[sizeof(td)];
             // memcpy(bytes, &td, sizeof(td));
 
@@ -484,7 +437,6 @@ void create_process(int thread_size, int total_requests,uv_thread_t *threads, th
             //     printf("%02X ", bytes[l]);
             // printf("\n");
 
-            // response_data_to_json(td);
             send_data(serialized);
             exit(0);
         }
@@ -520,7 +472,7 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     }
 
     int thread_size = (left_out_work == 0 ? num_of_threads : num_of_threads + 1);
-    printf("thread_size=%d\n", thread_size);
+    printf("final_process_size=%d\n", thread_size);
     uv_thread_t *threads = (uv_thread_t *)malloc(sizeof(uv_thread_t) * thread_size);
     thread_data *threads_data = (thread_data *)malloc(sizeof(thread_data) * thread_size);
 

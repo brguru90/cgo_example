@@ -42,6 +42,7 @@ func check_error(err error) {
 }
 
 func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData {
+	// still issue exists
 	var list []C.struct_ResponseData
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
 	sliceHeader.Cap = len
@@ -80,7 +81,8 @@ func thread_data_to_json(td C.struct_ResponseData, _len C.int, start C.int, end 
 	td_arr := carray2slice(&td, int(_len))
 	td_slice := []ResponseDataCMap{}
 
-	for _, td_item := range td_arr {
+	for k, td_item := range td_arr {
+		println(k,"serialized Response_body",C.GoString(td_item.Response_body))
 		td_slice = append(td_slice, ResponseDataCMap{
 			Debug:                         int(td_item.Debug),
 			Uid:                           C.GoString(td_item.Uid),
@@ -98,9 +100,6 @@ func thread_data_to_json(td C.struct_ResponseData, _len C.int, start C.int, end 
 			Status_code:                   int(td_item.Status_code),
 			Err_code:                      int(td_item.Status_code),
 		})
-		println("Response_body=>", C.GoString(td_item.Response_body), "<=")
-		println("Response_status=>", int(td_item.Status_code), "<=")
-		// td_item.Resp_body=C.CString(C.GoString(td_item.Resp_body))
 	}
 	serialize_to := thread_data_to_json_type{
 		Data:  td_slice,
@@ -134,6 +133,7 @@ func json_to_thread_data(json_data *C.char) *C.struct_ResponseDeserialized {
 	response_data_c_slice := (*[1<<30 - 1]C.struct_ResponseData)(response_data_c_array)
 	// response_data_c_slice := make([]C.struct_ResponseData, len(response_data.Data))
 	for i, rd := range response_data.Data {
+		// fmt.Println("desrialise Response_body",rd)
 		response_data_c_slice[i] = C.struct_ResponseData{
 			Debug:                         C.int(rd.Debug),
 			Uid:                           C.CString(rd.Uid),
@@ -186,7 +186,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func Call_api() {
-	total_requests := 2
+	total_requests := 4
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://localhost:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
@@ -236,10 +236,10 @@ func Call_api() {
 
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(2), 0)
 
-	for i = 0; i < total_requests; i++ {
-		fmt.Println(i,C.GoString(bulk_response_data[i].Response_body))
-		fmt.Println("status=", int(bulk_response_data[i].Status_code))
-	}
+	// for i = 0; i < total_requests; i++ {
+	// 	fmt.Println(i,"Response_body=",C.GoString(bulk_response_data[i].Response_body))
+	// 	fmt.Println(i,"status=", int(bulk_response_data[i].Status_code))
+	// }
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
 	// 	fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))

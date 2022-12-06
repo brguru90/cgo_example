@@ -355,7 +355,7 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
     auto curl_perform_with_context = [&](uv_poll_t *req, int status, int events)
     {
         // printf("curl_perform curl_handle %ld,loop_int %ld, loop=%ld\n", (long)curl_handle, loop_addrs_int, (long)loop);
-        if ((long)loop <= -1 ||  (long)loop!=loop_addrs_int)
+        if ((long)loop <= -1 || (long)loop != loop_addrs_int)
         {
             // only allow if loop is valid pointer & memory is not freed or address is unchanged
             return;
@@ -506,7 +506,10 @@ void api_req_async::on_request_complete()
            curl_easy_cleanup." */
             easy_handle = message->easy_handle;
             curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, &done_url);
-            printf("---done_url=%s\n", done_url);
+            if (response_ref->Debug > 2)
+            {
+                printf("---done_url=%s\n", done_url);
+            }
             curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, &response_ref);
             // if (res != CURLE_OK)
             // {
@@ -550,6 +553,8 @@ void api_req_async::on_request_complete()
                 printf("status_code=%d\n", response_ref->Status_code);
                 printf("before_connect_time_microsec=%lld,after_response_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf.total2=%lld\n", response_ref->Before_connect_time_microsec, response_ref->After_response_time_microsec, connect / 1e6, start / 1e6, total / 1e6, response_ref->After_response_time_microsec - response_ref->Before_connect_time_microsec);
             }
+            // printf("\nResponse_header=%s\n", response_ref->Response_header);
+            // printf("\nResponse_body=%s\n", response_ref->Response_body);
             if (response_ref->Debug > 3)
             {
                 printf("%s\n%s\n", response_ref->Response_header, response_ref->Response_body);
