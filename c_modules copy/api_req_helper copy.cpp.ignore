@@ -1,0 +1,334 @@
+#include "api_req_async.hpp"
+
+#define BUFFER_SIZE 80
+#define PORT 14509
+#define SA struct sockaddr
+
+pthread_mutex_t lock;
+
+typedef void (*get_received_data_type)(char *);
+
+void loop_on_the_thread(void *data)
+{
+    thread_data *td = (thread_data *)data;
+    td->api_req_async_on_thread->run(td);
+}
+
+void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
+{
+    fprintf(stderr, "Process exited with status %" PRId64 ", signal %d\n", exit_status, term_signal);
+    uv_close((uv_handle_t *)req, NULL);
+}
+
+void send_data(char buff[])
+{
+    printf("data to send=%s\n", buff);
+    int sockfd, connfd;
+    struct sockaddr_in servaddr, cli;
+
+    // socket create and verification
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        printf("socket creation failed...\n");
+        exit(0);
+    }
+    else
+        printf("Socket successfully created..\n");
+    bzero(&servaddr, sizeof(servaddr));
+
+    // assign IP, PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    servaddr.sin_port = htons(PORT);
+
+    // connect the client socket to server socket
+    if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
+    {
+        printf("connection with the server failed...\n");
+        exit(0);
+    }
+    else
+        printf("connected to the server..\n");
+
+    // function for chat
+    // write(sockfd, buff, sizeof(buff));
+    send(sockfd, buff, strlen(buff), 0);
+    printf("data sent=%s\n", buff);
+    bzero(buff, strlen(buff));
+
+    // close the socket
+    close(sockfd);
+}
+void receive_data(int thread_size, get_received_data_type get_received_data_cb)
+{
+    int sockfd, connfd, len;
+    struct sockaddr_in servaddr, cli;
+
+    // socket create and verification
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        printf("socket creation failed...\n");
+        exit(0);
+    }
+    else
+        printf("Socket successfully created..\n");
+    bzero(&servaddr, sizeof(servaddr));
+
+    // assign IP, PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(PORT);
+
+    // Binding newly created socket to given IP and verification
+    if ((bind(sockfd, (SA *)&servaddr, sizeof(servaddr))) != 0)
+    {
+        printf("socket bind failed...\n");
+        exit(0);
+    }
+    else
+        printf("Socket successfully binded..\n");
+
+    // Now server is ready to listen and verification
+    if ((listen(sockfd, 5)) != 0)
+    {
+        printf("Listen failed...\n");
+        exit(0);
+    }
+    else
+        printf("Server listening..\n");
+    len = sizeof(cli);
+
+    int i = thread_size;
+    while (1)
+    {
+        // Accept the data packet from client and verification
+        connfd = accept(sockfd, (SA *)&cli, (socklen_t *)&len);
+        if (connfd < 0)
+        {
+            printf("server accept failed...\n");
+            exit(0);
+        }
+        else
+            printf("server accept the client...\n");
+
+        // Function for chatting between client and server
+        char buffer[BUFFER_SIZE];
+        int n, cond;
+
+        char *raw_response = (char *)malloc(1);
+        while ((cond = recv(connfd, buffer, BUFFER_SIZE - 1, 0)) > 0)
+        {
+            printf("%d)\n", cond);
+            strcpy(raw_response, buffer);
+            bzero(buffer, BUFFER_SIZE);
+            if (strncmp("end_of_data", buffer, 11) == 0)
+            {
+                printf("end_of_data\n");
+                get_received_data_cb(raw_response);
+                raw_response = (char *)"";
+                break;
+            }
+        }
+        // infinite loop for chat
+        // char *raw_response = malloc(1);
+        // for (;;)
+        // {
+        //     bzero(buff, MAX);
+
+        //     // read the message from client and copy it in buffer
+        //     read(connfd, buff, sizeof(buff));
+        //     // print buffer which contains the client contents
+        //     printf("From client: %s\t To client : ", buff);
+        //     bzero(buff, MAX);
+        //     n = 0;
+        //     // copy server message in the buffer
+        //     while ((buff[n++] = getchar()) != '\n')
+        //         ;
+
+        //     // and send that buffer to client
+        //     write(connfd, buff, sizeof(buff));
+
+        //     // if msg contains "Exit" then server exit and chat ended.
+        //     if (strncmp("end_of_data", buff, 11) == 0)
+        //     {
+        //         printf("Server Exit...\n");
+        //         break;
+        //     }
+        // }
+
+        // After chatting close the socket
+        close(connfd);
+    }
+    close(sockfd);
+}
+
+void update_response_data(int thread_size, response_data *response_ref)
+{
+    auto lamda = [&](void *data) -> void
+    {
+        thread_data *td = (thread_data *)data;
+        printf("thread_id=%d", td->thread_id);
+    };
+    auto *closure = new std::function<void(void *data)>(lamda);
+
+    receive_data(thread_size, (get_received_data_type)closure);
+}
+
+typedef struct update_response_data_type
+{
+    int thread_size;
+    response_data *response_ref;
+} update_response_data_t;
+
+void *run_update_response_data(void *data)
+{
+    update_response_data_type *td = (update_response_data_type *)data;
+    update_response_data(td->thread_size, td->response_ref);
+    return NULL;
+}
+
+void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
+{
+    int num_of_threads = total_requests >= total_threads ? total_threads : total_requests;
+    int max_work_on_thread = floor((float)total_requests / num_of_threads);
+    int left_out_work = total_requests % num_of_threads;
+
+    printf("total_requests=%d,total_threads=%d,num_of_threads=%d,max_work_on_thread=%d,left_out_work=%d\n", total_requests, total_threads, num_of_threads, max_work_on_thread, left_out_work);
+
+    thread_pool_data proc_data[left_out_work == 0 ? num_of_threads : num_of_threads + 1];
+
+    for (int p = 0; p < num_of_threads; p++)
+    {
+        proc_data[p].start_index = p * max_work_on_thread;
+        proc_data[p].end_index = (proc_data[p].start_index + max_work_on_thread) - 1;
+        proc_data[p].full_index = false;
+    }
+    if (left_out_work > 0)
+    {
+        proc_data[num_of_threads].start_index = num_of_threads * max_work_on_thread;
+        proc_data[num_of_threads].end_index = (proc_data[num_of_threads].start_index + left_out_work) - 1;
+        proc_data[num_of_threads].full_index = false;
+    }
+
+    int thread_size = (left_out_work == 0 ? num_of_threads : num_of_threads + 1);
+    pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * thread_size);
+    thread_data *threads_data = (thread_data *)malloc(sizeof(thread_data) * thread_size);
+
+    update_response_data_t th_data;
+    th_data.thread_size = thread_size;
+    th_data.response_ref = response_ref;
+
+    pthread_t thread;
+    pthread_create(&thread, NULL, run_update_response_data, (void *)&th_data);
+
+    if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        printf("\n mutex init has failed\n");
+        return;
+    }
+
+    for (int i = 0; i < thread_size; i++)
+    {
+        threads_data[i].req_inputs_ptr = req_inputs;
+        threads_data[i].response_ref_ptr = response_ref;
+        threads_data[i].debug_flag = debug;
+        threads_data[i].thread_id = i;
+        threads_data[i].th_pool_data = proc_data[i];
+        threads_data[i].api_req_async_on_thread = new api_req_async(i, &lock);
+    }
+
+    for (int p = 0; p < thread_size; p++)
+    {
+        int temp_pid;
+        if ((proc_data[p].pid = fork()) == 0)
+        {
+            if (proc_data[p].pid == -1)
+            {
+                printf("failed to create process\n");
+                exit(1);
+            }
+            loop_on_the_thread((void *)&threads_data[p]);
+            thread_data td = (thread_data)threads_data[p];
+            printf("td=%d\n", td.thread_id);
+            int start = td.th_pool_data.start_index;
+            int end = td.th_pool_data.end_index;
+            // for(int k=start;k<=end;k++){
+            //     printf("status_code=%d\n",td.response_ref_ptr[k].status_code);
+            // }
+            // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
+            unsigned char bytes[sizeof(td)];
+            memcpy(bytes, &td, sizeof(td));
+            unsigned char *buffer = (unsigned char *)malloc(sizeof(td));
+            for (int l = 0; l < sizeof(bytes); l++){
+                buffer[l]=bytes[l];
+            }
+
+            for (int l = 0; l < sizeof(bytes); l++)
+                printf("%02X ", bytes[l]);
+            printf("\n");
+
+
+            // for (int l = 0; l < sizeof(buffer); l++)
+            //     printf("%02X ", buffer[l]);
+            // printf("\n");
+
+            threads_data[p].raw_bytes.ch=bytes;
+            threads_data[p].raw_bytes.length=sizeof(bytes);
+
+
+            // strcpy(threads_data[p].raw_bytes,bytes);
+
+            // printf("bytes=%d,diff bytes=%d\n", sizeof(bytes), sizeof(threads_data[p].raw_bytes));
+
+            // thread_data tmp;
+            // memcpy(&tmp, bytes, sizeof(bytes));
+
+            // for (int k = start; k <= end; k++)
+            // {
+            //     printf("status_code=%d\n", tmp.response_ref_ptr[k].status_code);
+            // }
+
+            // send_data(bytes);
+            exit(0);
+        }
+    }
+
+    for (int p = 0; p < thread_size; p++)
+    {
+        wait(NULL);
+    }
+
+    for (int p = 0; p < thread_size; p++)
+    {
+            // char bytes[sizeof(threads_data[p].raw_bytes)];
+            // strcpy(bytes, threads_data[p].raw_bytes);
+
+            thread_data tmp;
+            
+            char bytes[threads_data[p].raw_bytes.length];
+            for(int i=0;i<threads_data[p].raw_bytes.length;i++){
+                bytes[i]=threads_data[p].raw_bytes.ch[i];
+            }
+
+            for (int l = 0; l < sizeof(bytes); l++)
+                printf("%02X ", bytes[l]);
+            printf("\n");
+
+            memcpy(&tmp, bytes, sizeof(bytes));
+
+            int start=tmp.th_pool_data.start_index;
+            int end=tmp.th_pool_data.end_index;
+
+            printf("start=%d,end=%d,%d\n",start,end,tmp.thread_id);
+
+            // for(int k=start;k<=end;k++){
+            //     printf("status_code=%d\n",tmp.response_ref_ptr[k].status_code);
+            // }
+
+    }
+    // pthread_join(thread, NULL);
+
+    printf("\n\n--------- end -----------\n\n");
+}
