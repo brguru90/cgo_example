@@ -16,6 +16,7 @@ import "C"
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"reflect"
 
 	// "encoding/json"
@@ -34,13 +35,6 @@ import (
 )
 
 func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData {
-
-	var i int
-	for i = 0; i < len; i++ {
-		p:=(*C.struct_ResponseData)(unsafe.Pointer(uintptr(unsafe.Pointer(array))+(uintptr(i)*unsafe.Sizeof(C.struct_ResponseData{}))))
-		println("Response_body2=>", C.GoString(p.Response_body), "<=")
-	}
-
 	var list []C.struct_ResponseData
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
 	sliceHeader.Cap = len
@@ -48,27 +42,72 @@ func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData
 	sliceHeader.Data = uintptr(unsafe.Pointer(array))
 	return list	
 	// return (*[1 << 30]C.struct_ResponseData)(unsafe.Pointer(array))[:len:len]
+}
 
+
+type ResponseDataCMap struct 
+{
+    Debug int
+    Uid string
+    Response_header string
+    Response_body string
+    Before_connect_time_microsec int64
+    After_response_time_microsec int64
+    Connected_at_microsec int64
+    First_byte_at_microsec int64
+    Finish_at_microsec int64
+    Connect_time_microsec int64
+    Time_to_first_byte_microsec int64
+    Total_time_from_curl_microsec int64
+    Total_time_microsec int64
+    Status_code int
+    Err_code int
+}
+
+type thread_data_to_json_type struct{
+	Data []ResponseDataCMap
+	Start int
+	End int
 }
 
 //export thread_data_to_json
-func thread_data_to_json(td C.struct_ResponseData, _len C.int) *C.char {
-	// println("Response_body=",C.GoString(td.Response_body))
-	// carray2slice(&td, int(_len))
-	// println("len=",int(_len))
+func thread_data_to_json(td C.struct_ResponseData, _len C.int,start C.int,end C.int) *C.char {
 	td_arr := carray2slice(&td, int(_len))
+	td_slice:=[]ResponseDataCMap{}
+
 	for _, td_item := range td_arr {
+		td_slice=append(td_slice, ResponseDataCMap{
+			Debug: int(td_item.Debug),
+			Uid: C.GoString(td_item.Uid),
+			Response_header: C.GoString(td_item.Response_header),
+			Response_body:  C.GoString(td_item.Response_body),
+			Before_connect_time_microsec: int64(td_item.Before_connect_time_microsec),
+			After_response_time_microsec: int64(td_item.After_response_time_microsec),
+			Connected_at_microsec: int64(td_item.Connect_time_microsec),
+			First_byte_at_microsec: int64(td_item.First_byte_at_microsec),
+			Finish_at_microsec: int64(td_item.Finish_at_microsec),
+			Connect_time_microsec: int64(td_item.Connect_time_microsec),
+			Time_to_first_byte_microsec: int64(td_item.Time_to_first_byte_microsec),
+			Total_time_from_curl_microsec: int64(td_item.Total_time_from_curl_microsec),
+			Total_time_microsec: int64(td_item.Total_time_microsec),
+			Status_code: int(td_item.Status_code),
+			Err_code: int(td_item.Status_code),
+		})
 		println("Response_body=>", C.GoString(td_item.Response_body), "<=")
 		println("Response_status=>", int(td_item.Status_code), "<=")
 		// td_item.Resp_body=C.CString(C.GoString(td_item.Resp_body))
 	}
-	// _json_bytes,err := json.Marshal(td)
-	// if err!=nil{
-	// 	return  C.CString("")
-	// }
+	serialize_to:=thread_data_to_json_type{
+		Data: td_slice,
+		Start: int(start),
+		End:int(end),
+	}
+	_json_bytes,err := json.Marshal(serialize_to)
+	if err!=nil{
+		return  C.CString("")
+	}
 	// fmt.Println(string(_json_bytes))
-	// return  C.CString(string(_json_bytes))
-	return C.CString("")
+	return C.CString(string(_json_bytes))
 }
 
 func check_error(err error) {

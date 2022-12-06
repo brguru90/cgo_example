@@ -122,7 +122,7 @@ extern "C"
 {
 #endif
 
-    char* thread_data_to_json(response_data response_ref_ptr,int length);
+    char* thread_data_to_json(response_data response_ref_ptr,int length,int start,int end);
     void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug);
 
 #ifdef __cplusplus

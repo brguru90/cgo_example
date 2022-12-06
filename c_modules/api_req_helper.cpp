@@ -70,19 +70,20 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
 //     std::cout << json_data.str() << std::endl;
 // }
 
-void send_data(thread_data td)
+void send_data(char* serialized)
 {
-    int _size = sizeof(td) + strlen(end_of_data);
+    int _size = strlen(serialized) + strlen(end_of_data);
     char bytes[_size];
-    memcpy(bytes, &td, sizeof(td));
-    for (int i = sizeof(td), j = 0; i < _size && j < strlen(end_of_data); i++, j++)
+    memcpy(bytes, serialized, strlen(serialized));
+    for (int i = strlen(serialized), j = 0; i < _size && j < strlen(end_of_data); i++, j++)
     {
         bytes[i] = end_of_data[j];
     }
 
-    // printf("data to send2=%s,len=%ld\n", bytes, sizeof(bytes));
-    // for (int l = 0; l < sizeof(bytes); l++)
-    //     printf("%02X ", bytes[l]);
+    // printf("data to send2=%s,len=%ld\n", bytes, strlen(bytes));
+    // for (int l = 0; l < strlen(bytes); l++)
+    //     // printf("%02X ", bytes[l]);
+    //      printf("%c", bytes[l]);
     // printf("\n");
 
     int sockfd, connfd;
@@ -327,20 +328,22 @@ void update_response_data(int thread_size, response_data *response_ref)
     auto lamda = [&](StringType *raw_response) -> void
     {
         raw_response->length = raw_response->length - strlen(end_of_data);
-        printf("\n\nfinal data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
-        for (int l = 0; l < raw_response->length; l++)
-            printf("%02X ", raw_response->ch[l]);
-        printf("\n");
+        char tmp[raw_response->length];
+        memcpy(tmp, raw_response->ch, raw_response->length);
+        printf("\n\nfinal data from IPC->%ld,%s\n", raw_response->length, tmp);
+        // for (int l = 0; l < raw_response->length; l++)
+        //     printf("%02X ", raw_response->ch[l]);
+        // printf("\n");
 
-        thread_data tmp;
-        memcpy(&tmp, raw_response->ch, sizeof(raw_response->length));
+        // thread_data tmp;
+        // memcpy(&tmp, raw_response->ch, sizeof(raw_response->length));
 
-        int start = tmp.th_pool_data.start_index;
-        int end = tmp.th_pool_data.end_index;
+        // int start = tmp.th_pool_data.start_index;
+        // int end = tmp.th_pool_data.end_index;
 
         // https://github.com/bk192077/struct_mapping/blob/master/example/struct_to_json/struct_to_json.cpp
 
-        printf("start=%d,end=%d,%d\n", start, end, tmp.thread_id);
+        // printf("start=%d,end=%d,%d\n", start, end, tmp.thread_id);
 
         // for(int k=start;k<=end;k++){
         //     printf("status_code=%d\n",tmp.response_ref_ptr[k].status_code);
@@ -466,18 +469,17 @@ void create_process(int thread_size, int total_requests,uv_thread_t *threads, th
             thread_data td = (thread_data)threads_data[p];
             int start = td.th_pool_data.start_index;
             int end = td.th_pool_data.end_index;
-            response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(total_requests));
+            response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
             for(int k=start;k<=end;k++){
-                td_arr[k]=td.response_ref_ptr[k];
+                int m=k-start;
+                td_arr[m]=td.response_ref_ptr[k];
                 printf("thread=%d,Status_code=>%d\n",td.thread_id,td.response_ref_ptr[k].Status_code);
                 // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
-                // printf("Response_body=>%s\n",td_arr[k].Response_body);
+                printf("Response_body1=>%s\n",td_arr[m].Response_body);
             }
             // printf("len=%d\n",total_requests);
-            thread_data_to_json(*td_arr,total_requests);
-            // printf("td=%d\n", td.thread_id);
-            // thread_data *td2 = (thread_data*)td.api_req_async_on_thread->get_result();
-
+            char * serialized=thread_data_to_json(*td_arr,end-start+1,start,end);
+            // printf("serialized=%s\n",serialized);
             // char bytes[sizeof(td)];
             // memcpy(bytes, &td, sizeof(td));
 
@@ -487,7 +489,7 @@ void create_process(int thread_size, int total_requests,uv_thread_t *threads, th
             // printf("\n");
 
             // response_data_to_json(td);
-            // send_data(td);
+            send_data(serialized);
             exit(0);
         }
     }
