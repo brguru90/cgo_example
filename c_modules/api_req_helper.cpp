@@ -328,26 +328,22 @@ void update_response_data(int thread_size, response_data *response_ref)
     auto lamda = [&](StringType *raw_response) -> void
     {
         raw_response->length = raw_response->length - strlen(end_of_data);
+        // printf("\n\nraw final data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
         char tmp[raw_response->length];
-        memcpy(tmp, raw_response->ch, raw_response->length);
-        printf("\n\nfinal data from IPC->%ld,%s\n", raw_response->length, tmp);
+        bzero(tmp, raw_response->length);
+        // memcpy(tmp, raw_response->ch, raw_response->length);
+        for(int i=0;i<raw_response->length;i++){
+            tmp[i]=raw_response->ch[i];
+        }
+        // printf("\n\n    final data from IPC->%ld,%s\n", raw_response->length, tmp);
+        response_deserialized_type *response_deserialized=json_to_thread_data(tmp);
+        // printf("response_deserialized len=%d\n",response_deserialized->len);
         // for (int l = 0; l < raw_response->length; l++)
         //     printf("%02X ", raw_response->ch[l]);
         // printf("\n");
-
-        // thread_data tmp;
-        // memcpy(&tmp, raw_response->ch, sizeof(raw_response->length));
-
-        // int start = tmp.th_pool_data.start_index;
-        // int end = tmp.th_pool_data.end_index;
-
-        // https://github.com/bk192077/struct_mapping/blob/master/example/struct_to_json/struct_to_json.cpp
-
-        // printf("start=%d,end=%d,%d\n", start, end, tmp.thread_id);
-
-        // for(int k=start;k<=end;k++){
-        //     printf("status_code=%d\n",tmp.response_ref_ptr[k].status_code);
-        // }
+        for(int i=response_deserialized->start;i<=response_deserialized->end;i++){
+            response_ref[i]=response_deserialized->data[i-response_deserialized->start];
+        }
     };
     // auto *closure = new std::function<void(StringType *raw_response)>(lamda);
     auto lamda_with_context = Closure_raw_response::create<void>(lamda);

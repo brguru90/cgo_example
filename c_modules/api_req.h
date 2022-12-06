@@ -14,7 +14,6 @@
 #include <sys/wait.h>
 #include <inttypes.h>
 
-
 #ifndef __cplusplus
 #include <stdbool.h>
 #endif
@@ -59,7 +58,6 @@ typedef struct SingleRequestInput
     int time_out_in_sec;
 } request_input;
 
-
 struct memory
 {
     char *data;
@@ -88,7 +86,6 @@ typedef struct ResponseData
     int Err_code;
 } response_data;
 
-
 typedef struct ThreadPoolData
 {
     int start_index;
@@ -98,31 +95,37 @@ typedef struct ThreadPoolData
     bool full_index;
 } thread_pool_data;
 
-
 typedef struct BytesType
 {
-    unsigned char* ch;
+    unsigned char *ch;
     long length;
 } bytes_type;
 
 typedef struct StringType
 {
-    char* ch;
+    char *ch;
     long length;
 } string_type;
+
+typedef struct ResponseDeserialized
+{
+    response_data *data;
+    int len;
+    int start;
+    int end;
+} response_deserialized_type;
 
 // void * ptr_at(void **ptr, int idx) {
 //     return ptr[idx];
 // }
-
-
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-    char* thread_data_to_json(response_data response_ref_ptr,int length,int start,int end);
+    response_deserialized_type *json_to_thread_data(char *response_json);
+    char *thread_data_to_json(response_data response_ref_ptr, int length, int start, int end);
     void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug);
 
 #ifdef __cplusplus
