@@ -1,0 +1,30 @@
+
+#include "api_req.h"
+#include <stdio.h>
+#include <string.h>
+
+int main()
+{
+
+    int total_req = 400;
+
+    request_input *request_inputs = (request_input *)malloc(sizeof(request_input *) * total_req);
+    response_data *responses_data = (response_data *)malloc(sizeof(response_data *) * total_req);
+
+    for(int i=0;i<total_req;i++){
+        request_inputs[i].url=(char*)"http://localhost:8000/api/test/";
+        char str[sizeof(int)];
+        sprintf(str, "%d", i);
+        strcat(request_inputs[i].url,str);
+        request_inputs[i].headers=NULL;
+        request_inputs[i].headers_len=0;
+        request_inputs[i].body=NULL;
+        request_inputs[i].cookies=NULL;
+        request_inputs[i].time_out_in_sec=300;
+        request_inputs[i].uid=str;        
+    }
+
+    send_request_in_concurrently(request_inputs,responses_data,total_req,8,0);
+
+    return 0;
+}

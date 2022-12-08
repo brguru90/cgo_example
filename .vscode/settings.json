@@ -54,6 +54,7 @@
         "streambuf": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "inttypes.h": "c"
+        "inttypes.h": "c",
+        "api_req_async.hpp": "c"
     }
 }

@@ -256,7 +256,8 @@ func Call_api() {
 	nor_of_thread := math.Ceil(ram_size_in_GB / 70)
 	fmt.Println("go Nor of threads", nor_of_thread)
 
-
+	runtime.KeepAlive(request_input)
+	runtime.KeepAlive(bulk_response_data)
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()), 0)
 
 	// for i = 0; i < total_requests; i++ {
