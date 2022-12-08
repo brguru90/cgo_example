@@ -1,8 +1,12 @@
 #include "api_req_async.hpp"
 
 #define BUFFER_SIZE 100
-#define PORT 14505
+// #define PORT 14502
+#define PORT_MIN 49152
+#define PORT_MAX 65535
 #define SA struct sockaddr
+
+int PORT = (rand() % (PORT_MAX + 1 - PORT_MIN)) + PORT_MIN;
 
 pthread_mutex_t lock;
 
@@ -20,66 +24,6 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
 {
     fprintf(stderr, "Process exited with status %" PRId64 ", signal %d\n", exit_status, term_signal);
     uv_close((uv_handle_t *)req, NULL);
-}
-
-void send_data(char* serialized)
-{
-    int _size = strlen(serialized) + strlen(end_of_data);
-    char bytes[_size];
-    memcpy(bytes, serialized, strlen(serialized));
-    for (int i = strlen(serialized), j = 0; i < _size && j < strlen(end_of_data); i++, j++)
-    {
-        bytes[i] = end_of_data[j];
-    }
-
-    // printf("data to send2=%s,len=%ld\n", bytes, strlen(bytes));
-    // for (int l = 0; l < strlen(bytes); l++)
-    //     // printf("%02X ", bytes[l]);
-    //      printf("%c", bytes[l]);
-    // printf("\n");
-
-    int sockfd, connfd;
-    struct sockaddr_in servaddr, cli;
-
-    // socket create and verification
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1)
-    {
-        printf("socket creation failed...\n");
-        exit(0);
-    }
-    else
-        printf("Socket successfully created..\n");
-    bzero(&servaddr, sizeof(servaddr));
-
-    // assign IP, PORT
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    servaddr.sin_port = htons(PORT);
-
-    // connect the client socket to server socket
-    if (connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) != 0)
-    {
-        printf("connection with the server failed...\n");
-        exit(0);
-    }
-    else
-        printf("connected to the server..\n");
-
-    // function for chat
-    // write(sockfd, buff, sizeof(buff));
-    send(sockfd, bytes, sizeof(bytes), 0);
-    // send(sockfd, end_of_data, sizeof(end_of_data), 0);
-    bzero(bytes, strlen(bytes));
-
-    char buffer[BUFFER_SIZE];
-    bzero(buffer, BUFFER_SIZE);
-    // just make wait sender
-    recv(connfd, buffer, BUFFER_SIZE - 1, 0);
-    bzero(buffer, BUFFER_SIZE);
-
-    // close the socket
-    close(sockfd);
 }
 
 void my_strcpy(StringType &dest, char *src, int length)
@@ -127,11 +71,13 @@ int isSubString(StringType &dest, char end_of_data[])
 }
 
 int *receive_data_sockfd;
+struct sockaddr_in servaddr, cli;
 void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 {
     int sockfd, connfd, len;
-    struct sockaddr_in servaddr, cli;
     receive_data_sockfd = &sockfd;
+
+    printf("server on port=%d\n", PORT);
 
     // socket create and verification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -147,16 +93,32 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
     // assign IP, PORT
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons(PORT);
+    servaddr.sin_port = 0;
 
     // Binding newly created socket to given IP and verification
     if ((bind(sockfd, (SA *)&servaddr, sizeof(servaddr))) != 0)
     {
-        printf("socket bind failed...\n");
-        exit(0);
+        if (errno == EADDRINUSE)
+        {
+            printf("the port is not available. already to other process\n");
+            exit(1);
+        }
+        else
+        {
+            printf("could not bind to process (%d) %s\n", errno, strerror(errno));
+            exit(1);
+        }
     }
     else
-        printf("Socket successfully binded..\n");
+    {
+        socklen_t len = sizeof(servaddr);
+        if (getsockname(sockfd, (struct sockaddr *)&servaddr, &len) == -1)
+        {
+            perror("getsockname");
+            exit(1);
+        }
+        printf("Socket successfully binded  on port=%d..\n", servaddr.sin_port);
+    }
 
     // Now server is ready to listen and verification
     if ((listen(sockfd, 5)) != 0)
@@ -212,42 +174,111 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
                 get_received_data_cb(&raw_response);
                 raw_response.ch = (char *)"";
                 raw_response.length = 0;
+                // just sending data to sender that wait, so that sub process do not exit
                 send(connfd, end_of_data, strlen(end_of_data), 0);
                 break;
             }
             bzero(buffer, BUFFER_SIZE);
         }
-        // infinite loop for chat
-        // char *raw_response = malloc(1);
-        // for (;;)
-        // {
-        //     bzero(buff, MAX);
-
-        //     // read the message from client and copy it in buffer
-        //     read(connfd, buff, sizeof(buff));
-        //     // print buffer which contains the client contents
-        //     printf("From client: %s\t To client : ", buff);
-        //     bzero(buff, MAX);
-        //     n = 0;
-        //     // copy server message in the buffer
-        //     while ((buff[n++] = getchar()) != '\n')
-        //         ;
-
-        //     // and send that buffer to client
-        //     write(connfd, buff, sizeof(buff));
-
-        //     // if msg contains "Exit" then server exit and chat ended.
-        //     if (strncmp("end_of_data", buff, 11) == 0)
-        //     {
-        //         printf("Server Exit...\n");
-        //         break;
-        //     }
-        // }
-
-        // After chatting close the socket
         close(connfd);
     }
     close(sockfd);
+}
+
+void send_data(char *serialized)
+{
+    int _size = strlen(serialized) + strlen(end_of_data);
+    char bytes[_size];
+    memcpy(bytes, serialized, strlen(serialized));
+    for (int i = strlen(serialized), j = 0; i < _size && j < strlen(end_of_data); i++, j++)
+    {
+        bytes[i] = end_of_data[j];
+    }
+
+    // printf("data to send2=%s,len=%ld\n", bytes, strlen(bytes));
+    // for (int l = 0; l < strlen(bytes); l++)
+    //     // printf("%02X ", bytes[l]);
+    //      printf("%c", bytes[l]);
+    // printf("\n");
+
+    int sockfd;
+    struct sockaddr_in cli_addr, cli;
+
+    // socket create and verification
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        printf("socket creation failed...\n");
+        exit(0);
+    }
+    else
+        printf("Socket successfully created..\n");
+    bzero(&cli_addr, sizeof(cli_addr));
+
+    // assign IP, PORT
+    cli_addr.sin_family = AF_INET;
+    cli_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    cli_addr.sin_port = servaddr.sin_port;
+
+    // connect the client socket to server socket
+    if (connect(sockfd, (SA *)&cli_addr, sizeof(cli_addr)) != 0)
+    {
+        printf("connection with the server failed...\n");
+        exit(0);
+    }
+    else
+        printf("connected to the server..\n");
+
+    // function for chat
+    // write(sockfd, buff, sizeof(buff));
+    send(sockfd, bytes, sizeof(bytes), 0);
+    // send(sockfd, end_of_data, sizeof(end_of_data), 0);
+    bzero(bytes, strlen(bytes));
+
+    char buffer[BUFFER_SIZE];
+    bzero(buffer, BUFFER_SIZE);
+    // printf("waiting\n");
+    // just make wait sender
+    StringType raw_response;
+    // raw_response.ch=(char*)malloc(1);
+    raw_response.length = 0;
+    raw_response.ch = (char *)"";
+    int cond;
+    bool end_conn_signal = false;
+    while (!end_conn_signal)
+    {
+        // Accept the replay from server
+        usleep(200);
+        while ((cond = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) > 0)
+        {
+            // printf("%d)\n", cond);
+            // printf("Received:\n");
+            // for (int l = 0; l < sizeof(buffer); l++)
+            //     printf("%02X ", buffer[l]);
+            // printf("\n");
+            // strcpy(raw_response, buffer);
+            my_strcpy(raw_response, buffer, sizeof(buffer) - 1);
+
+            // strncpy(raw_response, buffer,sizeof(buffer));
+            // printf("raw_response=%s,size=%d\n", raw_response.ch, raw_response.length);
+            // if ( strstr(raw_response.ch,end_of_data) != NULL)
+            int pos = 0;
+            if ((pos = isSubString(raw_response, end_of_data)) >= 0)
+            {
+                // printf("wait complete-isSubString\n");
+                // raw_response.ch = (char *)"";
+                // raw_response.length = 0;
+                end_conn_signal = true;
+                break;
+            }
+            bzero(buffer, BUFFER_SIZE);
+        }
+    }
+    // printf("wait complete-%s\n", raw_response.ch);
+
+    // close the socket
+    close(sockfd);
+    printf("client socket closed successfully\n");
 }
 
 struct Closure_raw_response
@@ -279,10 +310,11 @@ void update_response_data(int thread_size, response_data *response_ref)
 {
     auto lamda = [&](StringType *raw_response) -> void
     {
+        printf("\n\nlen of raw final data from IPC->%ld,%ld\n", raw_response->length,strlen(raw_response->ch));
         raw_response->length = raw_response->length - strlen(end_of_data);
         // printf("\n\nraw final data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
         // char tmp[raw_response->length];
-        char *tmp=(char*)malloc(sizeof(char*)*raw_response->length);
+        char *tmp = (char *)malloc(sizeof(char) * raw_response->length);
         bzero(tmp, raw_response->length);
         memcpy(tmp, raw_response->ch, raw_response->length);
         // for(int i=0;i<raw_response->length;i++){
@@ -291,14 +323,16 @@ void update_response_data(int thread_size, response_data *response_ref)
         //     // printf("%d=%c\n",i,tmp[i]);
         // }
         // printf("\n\n    final data from IPC->%ld,char_len=%ld,%s\n", raw_response->length,strlen(tmp), tmp);
-        response_deserialized_type *response_deserialized=json_to_thread_data(tmp);
-        // // printf("response_deserialized len=%d\n",response_deserialized->len);
+        printf("\n\nlen of final data from IPC->%ld\n",strlen(tmp));
+        response_deserialized_type *response_deserialized = json_to_thread_data(tmp);
+        // printf("response_deserialized len=%d\n", response_deserialized->len);
         // // for (int l = 0; l < raw_response->length; l++)
         // //     printf("%02X ", raw_response->ch[l]);
         // // printf("\n");
-        for(int i=response_deserialized->start;i<=response_deserialized->end;i++){
+        for (int i = response_deserialized->start; i <= response_deserialized->end; i++)
+        {
             // printf("c res_data=%s\n",response_deserialized->data[i-response_deserialized->start].Response_body);
-            response_ref[i]=response_deserialized->data[i-response_deserialized->start];
+            response_ref[i] = response_deserialized->data[i - response_deserialized->start];
         }
     };
     // auto *closure = new std::function<void(StringType *raw_response)>(lamda);
@@ -330,13 +364,13 @@ struct child_worker
     uv_process_t req;
     uv_process_options_t options;
     uv_pipe_t pipe;
-} * workers;
+} *workers;
 
 uv_loop_t *main_loop;
 uv_process_t child_req;
 uv_process_options_t options;
 
-void create_process(int thread_size, int total_requests,uv_thread_t *threads, thread_data *threads_data, thread_pool_data proc_data[])
+void create_process(int thread_size, int total_requests, uv_thread_t *threads, thread_data *threads_data, thread_pool_data proc_data[])
 {
 
     // main_loop = uv_default_loop();
@@ -421,16 +455,18 @@ void create_process(int thread_size, int total_requests,uv_thread_t *threads, th
             thread_data td = (thread_data)threads_data[p];
             int start = td.th_pool_data.start_index;
             int end = td.th_pool_data.end_index;
-            response_data *td_arr=(response_data*)malloc(sizeof(response_data)*(end-start+1));
-            for(int k=start;k<=end;k++){
-                int m=k-start;
-                td_arr[m]=td.response_ref_ptr[k];
+            response_data *td_arr = (response_data *)malloc(sizeof(response_data) * (end - start + 1));
+            for (int k = start; k <= end; k++)
+            {
+                int m = k - start;
+                td_arr[m] = td.response_ref_ptr[k];
                 // printf("thread=%d,Status_code=>%d\n",td.thread_id,td.response_ref_ptr[k].Status_code);
                 // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
-                printf("Response_body1=>%d,%d) %s\n",m,k,td_arr[m].Response_body);
+                // printf("Response_body1=>%d,%d) %s\n",m,k,td_arr[m].Response_body);
             }
             // printf("start=%d,end=%d,len=%d\n",start,end,end-start+1);
-            char * serialized=thread_data_to_json(td_arr,end-start+1,start,end);
+            char *serialized = thread_data_to_json(td_arr, end - start + 1, start, end);
+            // printf("sending serialized with len=%d\n",end-start+1);
             // printf("serialized=%s\n",serialized);
             // char bytes[sizeof(td)];
             // memcpy(bytes, &td, sizeof(td));
@@ -502,7 +538,7 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].api_req_async_on_thread = new api_req_async(i);
     }
 
-    create_process(thread_size, total_requests,threads, threads_data, proc_data);
+    create_process(thread_size, total_requests, threads, threads_data, proc_data);
     // printf("pid=%d\n", getpid());
     pthread_cancel(thread);
     close(*receive_data_sockfd);
@@ -512,6 +548,7 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     printf("\n\n--------- end -----------\n\n");
 }
 
- void * ptr_at(void **ptr, int idx) {
-        return ptr[idx];
-    }
+void *ptr_at(void **ptr, int idx)
+{
+    return ptr[idx];
+}

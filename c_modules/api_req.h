@@ -104,7 +104,7 @@ typedef struct BytesType
 typedef struct StringType
 {
     char *ch;
-    long length;
+    size_t length;
 } string_type;
 
 typedef struct ResponseDeserialized

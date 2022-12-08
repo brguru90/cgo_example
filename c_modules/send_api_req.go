@@ -142,6 +142,7 @@ func json_to_thread_data(json_data *C.char) *C.struct_ResponseDeserialized {
 	var response_data thread_data_to_json_type
 	err := json.Unmarshal([]byte(C.GoString(json_data)), &response_data)
 	if err != nil {
+		println(C.GoString(json_data))
 		check_error(err)
 		returnStruct.data = nil
 		returnStruct.len = C.int(0)
@@ -208,7 +209,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 
 func Call_api() {
 	// debug.SetGCPercent(-1)
-	total_requests := 400
+	total_requests := 4000
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://localhost:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
@@ -260,10 +261,10 @@ func Call_api() {
 	runtime.KeepAlive(bulk_response_data)
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()), 0)
 
-	// for i = 0; i < total_requests; i++ {
-	// 	// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
-	// 	fmt.Println("status=", int(bulk_response_data[i].Status_code))
-	// }
+	for i = 0; i < total_requests; i++ {
+		// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
+		fmt.Println("status=", int(bulk_response_data[i].Status_code))
+	}
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
 	// 	fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))
