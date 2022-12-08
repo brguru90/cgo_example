@@ -71,6 +71,7 @@ int isSubString(StringType &dest, char end_of_data[])
 }
 
 int *receive_data_sockfd;
+bool ipc_server_ready=false;
 struct sockaddr_in servaddr, cli;
 void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 {
@@ -96,7 +97,7 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
     servaddr.sin_port = 0;
 
     // Binding newly created socket to given IP and verification
-    if ((bind(sockfd, (SA *)&servaddr, sizeof(servaddr))) != 0)
+    while ((bind(sockfd, (SA *)&servaddr, sizeof(servaddr))) < 0)
     {
         if (errno == EADDRINUSE)
         {
@@ -109,7 +110,6 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
             exit(1);
         }
     }
-    else
     {
         socklen_t len = sizeof(servaddr);
         if (getsockname(sockfd, (struct sockaddr *)&servaddr, &len) == -1)
@@ -130,6 +130,7 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
         printf("Server listening..\n");
     len = sizeof(cli);
 
+    ipc_server_ready=true;
     int i = thread_size;
     while (1)
     {
@@ -310,20 +311,22 @@ void update_response_data(int thread_size, response_data *response_ref)
 {
     auto lamda = [&](StringType *raw_response) -> void
     {
-        printf("\n\nlen of raw final data from IPC->%ld,%ld\n", raw_response->length,strlen(raw_response->ch));
+        printf("\n\nlen of raw final data from IPC->%ld,%ld\n", raw_response->length, strlen(raw_response->ch));
         raw_response->length = raw_response->length - strlen(end_of_data);
+        printf("\nlast char=%c",raw_response->ch[raw_response->length-1]);
         // printf("\n\nraw final data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
         // char tmp[raw_response->length];
-        char *tmp = (char *)malloc(sizeof(char) * raw_response->length);
-        bzero(tmp, raw_response->length);
+        char *tmp = (char *)malloc(sizeof(char*) * (raw_response->length+1));
+        bzero(tmp, raw_response->length+1);
         memcpy(tmp, raw_response->ch, raw_response->length);
         // for(int i=0;i<raw_response->length;i++){
         //     tmp[i]=raw_response->ch[i];
-        //     printf("%d,",i);
+        //     // printf("%d,",i);
         //     // printf("%d=%c\n",i,tmp[i]);
         // }
+        tmp[raw_response->length]='\0';
         // printf("\n\n    final data from IPC->%ld,char_len=%ld,%s\n", raw_response->length,strlen(tmp), tmp);
-        printf("\n\nlen of final data from IPC->%ld\n",strlen(tmp));
+        printf("\n\nlen of final data from IPC->%ld\n", strlen(tmp));
         response_deserialized_type *response_deserialized = json_to_thread_data(tmp);
         // printf("response_deserialized len=%d\n", response_deserialized->len);
         // // for (int l = 0; l < raw_response->length; l++)
@@ -537,6 +540,12 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].th_pool_data = proc_data[i];
         threads_data[i].api_req_async_on_thread = new api_req_async(i);
     }
+
+    while (!ipc_server_ready)
+    {
+        usleep(200);
+    }
+    
 
     create_process(thread_size, total_requests, threads, threads_data, proc_data);
     // printf("pid=%d\n", getpid());
