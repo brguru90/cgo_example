@@ -22,7 +22,7 @@ public:
     api_req_async(int th_id);
     ~api_req_async();
     void *run(void *data);
-    void* get_result();
+    void *get_result();
     void (api_req_async::*on_timeout_ptr)(uv_timer_t *req);
 };
 
@@ -37,3 +37,30 @@ typedef struct ThreadData
     BytesType raw_bytes;
 } thread_data;
 
+
+typedef void (*ipc_received_cb_data_type)(StringType *raw_response,uv_stream_t *client_stream);
+class my_tcp_server
+{
+private:
+    uv_loop_t *loop;
+    uv_tcp_t server;
+    int DEFAULT_PORT;
+    ipc_received_cb_data_type get_received_data_cb;
+    typedef struct
+    {
+        uv_write_t req;
+        uv_buf_t buf;
+    } write_req_t;
+
+    void on_new_connection(uv_stream_t *server, int status);
+    void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+
+public:
+    int server_ready=0;
+    struct sockaddr_in addr;
+    my_tcp_server(int port);
+    void register_ipc_received_callback(ipc_received_cb_data_type get_received_data_cb);
+    void write2client(uv_stream_t *stream, char *data, size_t len2);
+    int start_server();
+    void stop_server();
+};

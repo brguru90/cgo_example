@@ -55,6 +55,8 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp",
         "inttypes.h": "c",
-        "api_req_async.hpp": "c"
+        "api_req_async.hpp": "c",
+        "string.h": "c",
+        "uv.h": "c"
     }
 }

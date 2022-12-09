@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"os"
 	"reflect"
 	"runtime"
 
@@ -136,13 +137,25 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 }
 
 //export json_to_thread_data
-func json_to_thread_data(json_data *C.char) *C.struct_ResponseDeserialized {
+func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_ResponseDeserialized {
+	go_str_len:=uint64(str_len)
+	println("go_str_len",go_str_len)
+	mySlice := (*[1 << 30]byte)(unsafe.Pointer(json_data))[:go_str_len:go_str_len]
+
+    err2 := os.WriteFile("./json_bytes.json", mySlice, 0644)
+    check_error(err2)
+
+	// json_data_in_bytes := make([]byte,go_str_len )
+    // copy(json_data_in_bytes, (*(*[1024]byte)(unsafe.Pointer(json_data)))[:go_str_len:go_str_len])
+
 	returnStruct := (*C.struct_ResponseDeserialized)(C.malloc(C.size_t(unsafe.Sizeof(C.struct_ResponseDeserialized{}))))
 
 	var response_data thread_data_to_json_type
-	err := json.Unmarshal([]byte(C.GoString(json_data)), &response_data)
+	err := json.Unmarshal(mySlice, &response_data)
 	if err != nil {
-		println(C.GoString(json_data))
+		// println(string(mySlice))
+		// fmt.Printf("mystr:\t %02X \n", mySlice)
+
 		check_error(err)
 		returnStruct.data = nil
 		returnStruct.len = C.int(0)
@@ -209,7 +222,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 
 func Call_api() {
 	// debug.SetGCPercent(-1)
-	total_requests := 4000
+	total_requests := 4
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://localhost:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"

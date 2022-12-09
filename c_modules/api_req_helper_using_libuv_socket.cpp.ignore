@@ -98,19 +98,18 @@ struct Closure_my_tcp_server_cb
         return callback;
     }
 };
-my_tcp_server server=my_tcp_server(0);
+
 void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 {
+    my_tcp_server server=my_tcp_server();
     auto cb=[&](StringType *raw_response,uv_stream_t *client_stream)-> void{
         get_received_data_cb(raw_response);
         server.write2client(client_stream,end_of_data,strlen(end_of_data));
     };
     auto _closure_cb = Closure_my_tcp_server_cb::create<void>(cb);
     server.register_ipc_received_callback(_closure_cb);
-    while(server.start_server()==-1){
-        usleep(200);
-    }
-    // servaddr.sin_port=htons(server.addr.sin_port);
+    server.start_server();
+    servaddr=server.addr;
     // int sockfd, connfd, len;
     // receive_data_sockfd = &sockfd;
 
@@ -255,18 +254,16 @@ void send_data(char *serialized)
     // assign IP, PORT
     cli_addr.sin_family = AF_INET;
     cli_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    cli_addr.sin_port = htons(server.addr.sin_port);
-    // cli_addr.sin_family=servaddr.sin_family;
-    // cli_addr.sin_addr=servaddr.sin_addr;
+    cli_addr.sin_port = servaddr.sin_port;
 
     // connect the client socket to server socket
     if (connect(sockfd, (SA *)&cli_addr, sizeof(cli_addr)) != 0)
     {
-        printf("connection with the server failed %d,err=%d...\n",cli_addr.sin_port,errno);
+        printf("connection with the server failed...\n");
         exit(0);
     }
     else
-        printf("connected to the server with port=%d..\n",cli_addr.sin_port);
+        printf("connected to the server with port=%d..\n",servaddr.sin_port);
 
     // function for chat
     // write(sockfd, buff, sizeof(buff));
@@ -299,7 +296,7 @@ void send_data(char *serialized)
             my_strcpy(raw_response, buffer, sizeof(buffer) - 1);
 
             // strncpy(raw_response, buffer,sizeof(buffer));
-            printf("raw_response=%s,size=%d\n", raw_response.ch, raw_response.length);
+            // printf("raw_response=%s,size=%d\n", raw_response.ch, raw_response.length);
             // if ( strstr(raw_response.ch,end_of_data) != NULL)
             int pos = 0;
             if ((pos = isSubString(raw_response, end_of_data)) >= 0)
@@ -399,13 +396,6 @@ void on_exit2(uv_process_t *req, int64_t exit_status, int term_signal)
     fprintf(stderr, "Process exited with status %" PRId64 ", signal %d\n", exit_status, term_signal);
     uv_close((uv_handle_t *)req, NULL);
 }
-
-void run_update_response_data(void *data)
-{
-    update_response_data_type *td = (update_response_data_type *)data;
-    update_response_data(td->thread_size, td->response_ref);
-}
-
 struct child_worker
 {
     uv_process_t req;
@@ -534,7 +524,6 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
     }
 }
 
-
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
 {
     int num_of_threads = total_requests >= total_threads ? total_threads : total_requests;
@@ -567,10 +556,7 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
     th_data.thread_size = thread_size;
     th_data.response_ref = response_ref;
 
-    uv_thread_t hare_id;
-    uv_thread_create(&hare_id, run_update_response_data, (void *)&th_data);
-
-    // update_response_data(th_data.thread_size, th_data.response_ref);
+    update_response_data(th_data.thread_size, th_data.response_ref);
 
     for (int i = 0; i < thread_size; i++)
     {
@@ -582,14 +568,15 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].api_req_async_on_thread = new api_req_async(i);
     }
 
-    while (server.server_ready==0)
-    {
-        usleep(200);
-    }
+    // while (!ipc_server_ready)
+    // {
+    //     usleep(200);
+    // }
     
 
     create_process(thread_size, total_requests, threads, threads_data, proc_data);
     // close(*receive_data_sockfd);
+
 
     printf("\n\n--------- end -----------\n\n");
 }

@@ -121,7 +121,7 @@ extern "C"
 #endif
 
     void *ptr_at(void **ptr, int idx);
-    response_deserialized_type *json_to_thread_data(char *response_json);
+    response_deserialized_type *json_to_thread_data(char *response_json,size_t _len);
     char *thread_data_to_json(response_data *response_ref_ptr, int length, int start, int end);
     void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug);
 
