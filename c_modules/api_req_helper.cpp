@@ -1,5 +1,7 @@
 #include "api_req_async.hpp"
 
+using namespace std;
+
 #define BUFFER_SIZE 100
 // #define PORT 14502
 #define PORT_MIN 49152
@@ -11,7 +13,6 @@ int PORT = (rand() % (PORT_MAX + 1 - PORT_MIN)) + PORT_MIN;
 pthread_mutex_t lock;
 
 char end_of_data[] = "end_of_data";
-
 
 void loop_on_the_thread(void *data)
 {
@@ -70,19 +71,19 @@ int isSubString(StringType &dest, char end_of_data[])
 }
 
 int *receive_data_sockfd;
-bool ipc_server_ready=false;
+bool ipc_server_ready = false;
 struct sockaddr_in servaddr, cli;
 typedef void (*get_received_data_type)(StringType *raw_response);
 
 struct Closure_my_tcp_server_cb
 {
     template <typename Any, typename RETURN_TYPE>
-    static Any lambda_ptr_exec(StringType *raw_response,uv_stream_t *client_stream)
+    static Any lambda_ptr_exec(StringType *raw_response, uv_stream_t *client_stream)
     {
         return (Any)(*(RETURN_TYPE *)callback<RETURN_TYPE>())(raw_response, client_stream);
     }
 
-    template <typename Any = void, typename CALLER_TYPE = Any (*)(StringType *raw_response,uv_stream_t *client_stream), typename RETURN_TYPE>
+    template <typename Any = void, typename CALLER_TYPE = Any (*)(StringType *raw_response, uv_stream_t *client_stream), typename RETURN_TYPE>
     static CALLER_TYPE create(RETURN_TYPE &t)
     {
         callback<RETURN_TYPE>(&t);
@@ -98,16 +99,23 @@ struct Closure_my_tcp_server_cb
         return callback;
     }
 };
-my_tcp_server server=my_tcp_server(0);
+my_tcp_server server = my_tcp_server(0);
 void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 {
-    auto cb=[&](StringType *raw_response,uv_stream_t *client_stream)-> void{
-        get_received_data_cb(raw_response);
-        server.write2client(client_stream,end_of_data,strlen(end_of_data));
+    auto cb = [&](StringType *raw_response, uv_stream_t *client_stream) -> void
+    {
+        printf("------------get_received_data_cb-----------------\n");
+        ofstream MyFile("./json_bytes_c_recv.json");
+        MyFile << raw_response->ch;
+        MyFile.close();
+        // get_received_data_cb(raw_response);
+        server.write2client(client_stream, end_of_data, strlen(end_of_data));
     };
     auto _closure_cb = Closure_my_tcp_server_cb::create<void>(cb);
-    server.register_ipc_received_callback(_closure_cb);
-    while(server.start_server()==-1){
+    printf("_closure_cb=%p\n", _closure_cb);
+    server.register_ipc_received_callback(&_closure_cb);
+    while (server.start_server() == -1)
+    {
         usleep(200);
     }
     // servaddr.sin_port=htons(server.addr.sin_port);
@@ -222,15 +230,27 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
     // close(sockfd);
 }
 
-void send_data(char *serialized)
+void send_data(char *serialized, int start)
 {
     int _size = strlen(serialized) + strlen(end_of_data);
-    char bytes[_size];
-    memcpy(bytes, serialized, strlen(serialized));
-    for (int i = strlen(serialized), j = 0; i < _size && j < strlen(end_of_data); i++, j++)
-    {
-        bytes[i] = end_of_data[j];
-    }
+    // char bytes[_size];
+    // memcpy(bytes, serialized, strlen(serialized));
+
+    StringType main_raw_response;
+    main_raw_response.length = 0;
+    my_strcpy(main_raw_response, serialized, strlen(serialized));
+    my_strcpy(main_raw_response, end_of_data, strlen(end_of_data));
+
+    // char buffer2[1024];
+    // snprintf(buffer2, sizeof(buffer2), "./json_bytes2_%d.json", start);
+    // ofstream MyFile(buffer2);
+    // MyFile << main_raw_response.ch;
+    // MyFile.close();
+
+    // for (int i = strlen(serialized), j = 0; i < _size && j < strlen(end_of_data); i++, j++)
+    // {
+    //     bytes[i] = end_of_data[j];
+    // }
 
     // printf("data to send2=%s,len=%ld\n", bytes, strlen(bytes));
     // for (int l = 0; l < strlen(bytes); l++)
@@ -238,86 +258,105 @@ void send_data(char *serialized)
     //      printf("%c", bytes[l]);
     // printf("\n");
 
-    int sockfd;
-    struct sockaddr_in cli_addr, cli;
-
-    // socket create and verification
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1)
+    my_tcp_client client = my_tcp_client(htons(server.addr.sin_port));
+    auto cb = [&](StringType *raw_response, uv_stream_t *client_stream) -> void
     {
-        printf("socket creation failed...\n");
-        exit(0);
-    }
-    else
-        printf("Socket successfully created..\n");
-    bzero(&cli_addr, sizeof(cli_addr));
-
-    // assign IP, PORT
-    cli_addr.sin_family = AF_INET;
-    cli_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    cli_addr.sin_port = htons(server.addr.sin_port);
-    // cli_addr.sin_family=servaddr.sin_family;
-    // cli_addr.sin_addr=servaddr.sin_addr;
-
-    // connect the client socket to server socket
-    if (connect(sockfd, (SA *)&cli_addr, sizeof(cli_addr)) != 0)
-    {
-        printf("connection with the server failed %d,err=%d...\n",cli_addr.sin_port,errno);
-        exit(0);
-    }
-    else
-        printf("connected to the server with port=%d..\n",cli_addr.sin_port);
-
-    // function for chat
-    // write(sockfd, buff, sizeof(buff));
-    send(sockfd, bytes, sizeof(bytes), 0);
-    // send(sockfd, end_of_data, sizeof(end_of_data), 0);
-    bzero(bytes, strlen(bytes));
-
-    char buffer[BUFFER_SIZE];
-    bzero(buffer, BUFFER_SIZE);
-    printf("waiting\n");
-    // just make wait sender
-    StringType raw_response;
-    // raw_response.ch=(char*)malloc(1);
-    raw_response.length = 0;
-    raw_response.ch = (char *)"";
-    int cond;
-    bool end_conn_signal = false;
-    while (!end_conn_signal)
-    {
-        // Accept the replay from server
-        usleep(200);
-        while ((cond = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) > 0)
+        uv_write_t *req = client.write2server(client_stream, main_raw_response.ch, main_raw_response.length, nullptr);
+        auto cb2 = [&](StringType *raw_response2, uv_stream_t *client_stream2)
         {
-            // printf("%d)\n", cond);
-            // printf("Received:\n");
-            // for (int l = 0; l < sizeof(buffer); l++)
-            //     printf("%02X ", buffer[l]);
-            // printf("\n");
-            // strcpy(raw_response, buffer);
-            my_strcpy(raw_response, buffer, sizeof(buffer) - 1);
+            // printf("raw_response2=%s\n",raw_response2->ch);
+            // client.free_write_req(req);
+            client.stop_client();
+        };
+        auto _closure_cb2 = Closure_my_tcp_server_cb::create<void>(cb2);
+        client.read_response(client_stream, &_closure_cb2);
+        // client.free_write_req(req);
+        // client.stop_client();
+    };
+    auto _closure_cb = Closure_my_tcp_server_cb::create<void>(cb);
+    client.register_ipc_received_callback(&_closure_cb);
+    client.start_client();
 
-            // strncpy(raw_response, buffer,sizeof(buffer));
-            printf("raw_response=%s,size=%d\n", raw_response.ch, raw_response.length);
-            // if ( strstr(raw_response.ch,end_of_data) != NULL)
-            int pos = 0;
-            if ((pos = isSubString(raw_response, end_of_data)) >= 0)
-            {
-                printf("wait complete-isSubString\n");
-                // raw_response.ch = (char *)"";
-                // raw_response.length = 0;
-                end_conn_signal = true;
-                break;
-            }
-            bzero(buffer, BUFFER_SIZE);
-        }
-    }
-    printf("wait complete-%s\n", raw_response.ch);
+    // int sockfd;
+    // struct sockaddr_in cli_addr, cli;
 
-    // close the socket
-    close(sockfd);
-    printf("client socket closed successfully\n");
+    // // socket create and verification
+    // sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    // if (sockfd == -1)
+    // {
+    //     printf("socket creation failed...\n");
+    //     exit(0);
+    // }
+    // else
+    //     printf("Socket successfully created..\n");
+    // bzero(&cli_addr, sizeof(cli_addr));
+
+    // // assign IP, PORT
+    // cli_addr.sin_family = AF_INET;
+    // cli_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    // cli_addr.sin_port = server.addr.sin_port;
+    // // cli_addr.sin_family=servaddr.sin_family;
+    // // cli_addr.sin_addr=servaddr.sin_addr;
+
+    // // connect the client socket to server socket
+    // if (connect(sockfd, (SA *)&cli_addr, sizeof(cli_addr)) != 0)
+    // {
+    //     printf("connection with the server failed %d,err=%d...\n", cli_addr.sin_port, errno);
+    //     exit(0);
+    // }
+    // else
+    //     printf("connected to the server with port=%d..\n", cli_addr.sin_port);
+
+    // // function for chat
+    // // write(sockfd, buff, sizeof(buff));
+    // send(sockfd, main_raw_response.ch, main_raw_response.length, 0);
+    // // send(sockfd, end_of_data, sizeof(end_of_data), 0);
+    // // bzero(bytes, strlen(bytes));
+
+    // char buffer[BUFFER_SIZE];
+    // bzero(buffer, BUFFER_SIZE);
+    // printf("waiting\n");
+    // // just make wait sender
+    // StringType raw_response;
+    // // raw_response.ch=(char*)malloc(1);
+    // raw_response.length = 0;
+    // raw_response.ch = (char *)"";
+    // int cond;
+    // bool end_conn_signal = false;
+    // while (!end_conn_signal)
+    // {
+    //     // Accept the replay from server
+    //     usleep(200);
+    //     while ((cond = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) > 0)
+    //     {
+    //         // printf("%d)\n", cond);
+    //         // printf("Received:\n");
+    //         // for (int l = 0; l < sizeof(buffer); l++)
+    //         //     printf("%02X ", buffer[l]);
+    //         // printf("\n");
+    //         // strcpy(raw_response, buffer);
+    //         my_strcpy(raw_response, buffer, sizeof(buffer) - 1);
+
+    //         // strncpy(raw_response, buffer,sizeof(buffer));
+    //         printf("raw_response=%s,size=%ld\n", raw_response.ch, raw_response.length);
+    //         // if ( strstr(raw_response.ch,end_of_data) != NULL)
+    //         int pos = 0;
+    //         if ((pos = isSubString(raw_response, end_of_data)) >= 0)
+    //         {
+    //             printf("wait complete-isSubString\n");
+    //             // raw_response.ch = (char *)"";
+    //             // raw_response.length = 0;
+    //             end_conn_signal = true;
+    //             break;
+    //         }
+    //         bzero(buffer, BUFFER_SIZE);
+    //     }
+    // }
+    // printf("wait complete-%s\n", raw_response.ch);
+
+    // // close the socket
+    // close(sockfd);
+    // printf("client socket closed successfully\n");
 }
 
 struct Closure_raw_response
@@ -349,13 +388,16 @@ void update_response_data(int thread_size, response_data *response_ref)
 {
     auto lamda = [&](StringType *raw_response) -> void
     {
+        ofstream MyFile("./json_bytes_c.json");
+        MyFile << raw_response->ch;
+        MyFile.close();
         printf("\n\nlen of raw final data from IPC->%ld,%ld\n", raw_response->length, strlen(raw_response->ch));
         raw_response->length = raw_response->length - strlen(end_of_data);
-        printf("\nlast char=%c",raw_response->ch[raw_response->length-1]);
+        printf("\nlast char=%c", raw_response->ch[raw_response->length - 1]);
         // printf("\n\nraw final data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
         // char tmp[raw_response->length];
-        char *tmp = (char *)malloc(sizeof(char*) * (raw_response->length+1));
-        bzero(tmp, raw_response->length+1);
+        char *tmp = (char *)malloc(sizeof(char *) * (raw_response->length + 1));
+        bzero(tmp, raw_response->length + 1);
         memcpy(tmp, raw_response->ch, raw_response->length);
         // tmp[raw_response->length]='\0';
         // raw_response->length++;
@@ -369,7 +411,7 @@ void update_response_data(int thread_size, response_data *response_ref)
         // }
         // printf("\n");
         printf("\n\nlen of final data from IPC->%ld\n", strlen(tmp));
-        response_deserialized_type *response_deserialized = json_to_thread_data(tmp,raw_response->length);
+        response_deserialized_type *response_deserialized = json_to_thread_data(tmp, raw_response->length);
         // printf("response_deserialized len=%d\n", response_deserialized->len);
         // // for (int l = 0; l < raw_response->length; l++)
         // //     printf("%02X ", raw_response->ch[l]);
@@ -391,8 +433,6 @@ typedef struct update_response_data_type
     int thread_size;
     response_data *response_ref;
 } update_response_data_t;
-
-
 
 void on_exit2(uv_process_t *req, int64_t exit_status, int term_signal)
 {
@@ -513,6 +553,14 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             }
             // printf("start=%d,end=%d,len=%d\n",start,end,end-start+1);
             char *serialized = thread_data_to_json(td_arr, end - start + 1, start, end);
+            threads_data[p].api_req_async_on_thread->~api_req_async();
+
+            // char buffer[1024];
+            // snprintf(buffer, sizeof(buffer),"./json_bytes1_%d.json",start);
+            // ofstream MyFile(buffer);
+            // MyFile << serialized;
+            // MyFile.close();
+
             // printf("sending serialized with len=%d\n",end-start+1);
             // printf("serialized=%s\n",serialized);
             // char bytes[sizeof(td)];
@@ -522,8 +570,7 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             // for (int l = 0; l < sizeof(bytes); l++)
             //     printf("%02X ", bytes[l]);
             // printf("\n");
-
-            send_data(serialized);
+            send_data(serialized, start);
             exit(0);
         }
     }
@@ -533,7 +580,6 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
         wait(NULL);
     }
 }
-
 
 void send_request_in_concurrently(request_input *req_inputs, response_data *response_ref, int total_requests, int total_threads, int debug)
 {
@@ -582,11 +628,10 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].api_req_async_on_thread = new api_req_async(i);
     }
 
-    while (server.server_ready==0)
+    while (server.server_ready == 0)
     {
         usleep(200);
     }
-    
 
     create_process(thread_size, total_requests, threads, threads_data, proc_data);
     // close(*receive_data_sockfd);

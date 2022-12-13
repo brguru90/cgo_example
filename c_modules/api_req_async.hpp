@@ -2,6 +2,9 @@
 #include <iterator>
 #include <functional>
 #include <sstream>
+#include <fstream>
+#include <map>
+
 
 class api_req_async
 {
@@ -37,13 +40,45 @@ typedef struct ThreadData
     BytesType raw_bytes;
 } thread_data;
 
+typedef void (*ipc_received_cb_data_type)(StringType *raw_response, uv_stream_t *client_stream);
 
-typedef void (*ipc_received_cb_data_type)(StringType *raw_response,uv_stream_t *client_stream);
+typedef struct LoopData
+{
+    ipc_received_cb_data_type *get_received_data_cb;
+
+} loop_data_type;
+
 class my_tcp_server
 {
 private:
     uv_loop_t *loop;
     uv_tcp_t server;
+    int DEFAULT_PORT;
+    typedef struct
+    {
+        uv_write_t req;
+        uv_buf_t buf;
+    } write_req_t;
+
+    void on_new_connection(uv_stream_t *server, int status);
+    StringType echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+
+public:
+    int server_ready = 0;
+    struct sockaddr_in addr;
+    loop_data_type *loop_data;
+    my_tcp_server(int port);
+    void register_ipc_received_callback(ipc_received_cb_data_type *get_received_data_cb);
+    void write2client(uv_stream_t *stream, char *data, size_t len2);
+    int start_server();
+    void stop_server();
+};
+
+class my_tcp_client
+{
+private:
+    uv_loop_t *loop;
+    uv_tcp_t client;
     int DEFAULT_PORT;
     ipc_received_cb_data_type get_received_data_cb;
     typedef struct
@@ -52,15 +87,16 @@ private:
         uv_buf_t buf;
     } write_req_t;
 
-    void on_new_connection(uv_stream_t *server, int status);
-    void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
+    void on_connect(uv_connect_t *client, int status);
+    void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf, ipc_received_cb_data_type *cb);
 
 public:
-    int server_ready=0;
     struct sockaddr_in addr;
-    my_tcp_server(int port);
-    void register_ipc_received_callback(ipc_received_cb_data_type get_received_data_cb);
-    void write2client(uv_stream_t *stream, char *data, size_t len2);
-    int start_server();
-    void stop_server();
+    my_tcp_client(int port);
+    void register_ipc_received_callback(ipc_received_cb_data_type *get_received_data_cb);
+    uv_write_t *write2server(uv_stream_t *stream, char *data, size_t len2, uv_write_t *req);
+    void read_response(uv_stream_t *stream, ipc_received_cb_data_type *cb);
+    void free_write_req(uv_write_t *req);
+    int start_client();
+    void stop_client();
 };

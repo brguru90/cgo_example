@@ -36,7 +36,6 @@ import (
 	"unsafe"
 )
 
-
 func check_error(err error) {
 	if err != nil {
 		panic(err)
@@ -131,6 +130,8 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 	if err != nil {
 		return C.CString("")
 	}
+	// err2 := os.WriteFile(fmt.Sprintf("./json_bytes_%d.json",int(start)), _json_bytes, 0644)
+	// check_error(err2)
 	// fmt.Println(string(_json_bytes))
 	return C.CString(string(_json_bytes))
 	// return C.CString("")
@@ -138,15 +139,15 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 
 //export json_to_thread_data
 func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_ResponseDeserialized {
-	go_str_len:=uint64(str_len)
-	println("go_str_len",go_str_len)
+	go_str_len := uint64(str_len)
+	println("go_str_len", go_str_len)
 	mySlice := (*[1 << 30]byte)(unsafe.Pointer(json_data))[:go_str_len:go_str_len]
 
-    err2 := os.WriteFile("./json_bytes.json", mySlice, 0644)
-    check_error(err2)
+	// err2 := os.WriteFile("./json_bytes.json", mySlice, 0644)
+	// check_error(err2)
 
 	// json_data_in_bytes := make([]byte,go_str_len )
-    // copy(json_data_in_bytes, (*(*[1024]byte)(unsafe.Pointer(json_data)))[:go_str_len:go_str_len])
+	// copy(json_data_in_bytes, (*(*[1024]byte)(unsafe.Pointer(json_data)))[:go_str_len:go_str_len])
 
 	returnStruct := (*C.struct_ResponseDeserialized)(C.malloc(C.size_t(unsafe.Sizeof(C.struct_ResponseDeserialized{}))))
 
@@ -155,6 +156,8 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 	if err != nil {
 		// println(string(mySlice))
 		// fmt.Printf("mystr:\t %02X \n", mySlice)
+		err2 := os.WriteFile("./json_bytes_go.json", mySlice, 0644)
+		check_error(err2)
 
 		check_error(err)
 		returnStruct.data = nil
@@ -193,7 +196,6 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 	returnStruct.end = C.int(response_data.End)
 	return returnStruct
 }
-
 
 func parseHttpResponse(header string, _body string, req *http.Request) (*http.Response, error) {
 	skip_string := "Transfer-Encoding: chunked\r\n"
@@ -276,7 +278,7 @@ func Call_api() {
 
 	for i = 0; i < total_requests; i++ {
 		// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
-		fmt.Println("status=", int(bulk_response_data[i].Status_code))
+		fmt.Println("go status=", int(bulk_response_data[i].Status_code))
 	}
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))

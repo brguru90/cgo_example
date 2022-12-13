@@ -12,7 +12,6 @@ long long get_current_time()
     return (((long long)tv.tv_sec) * 1e6) + (tv.tv_usec);
 }
 
-
 static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp)
 {
     size_t realsize = size * nmemb;
@@ -191,7 +190,7 @@ static void on_request_complete(CURLM *curl_handle)
                 printf("status_code=%d\n", response_ref->Status_code);
                 printf("before_connect_time_microsec=%lld,after_response_time_microsec=%lld,seconds to connect=%lf,ttfb=%lf,total=%lf.total2=%lld\n", response_ref->Before_connect_time_microsec, response_ref->After_response_time_microsec, connect / 1e6, start / 1e6, total / 1e6, response_ref->After_response_time_microsec - response_ref->Before_connect_time_microsec);
             }
-           if (response_ref->Debug > 3)
+            if (response_ref->Debug > 3)
             {
                 printf("%s\n%s\n", response_ref->Response_header, response_ref->Response_body);
             }
@@ -213,7 +212,7 @@ static void on_request_complete(CURLM *curl_handle)
 
 static void curl_perform(uv_poll_t *req, int status, int events)
 {
-    CURLM * curl_handle=( CURLM *)req->loop->data;
+    CURLM *curl_handle = (CURLM *)req->loop->data;
     int running_handles;
     int flags = 0;
     curl_context_t *context;
@@ -226,18 +225,18 @@ static void curl_perform(uv_poll_t *req, int status, int events)
     context = (curl_context_t *)req->data;
 
     curl_multi_socket_action(curl_handle, context->sockfd, flags,
-                                   &running_handles);
+                             &running_handles);
 
     on_request_complete(curl_handle);
 }
 
 static void on_timeout(uv_timer_t *req)
 {
-    CURLM * curl_handle=( CURLM *)req->loop->data;
+    CURLM *curl_handle = (CURLM *)req->loop->data;
     int running_handles;
     // printf("on_timeout curl_handle=%ld\n",(long)curl_handle);
     curl_multi_socket_action(curl_handle, CURL_SOCKET_TIMEOUT, 0,
-                                   &running_handles);
+                             &running_handles);
     on_request_complete(curl_handle);
 }
 
@@ -257,7 +256,6 @@ int api_req_async::start_timeout(CURLM *multi, long timeout_ms, void *userp)
     }
     return 0;
 }
-
 
 int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *userp,
                                  void *socketp)
@@ -296,9 +294,6 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
     return 0;
 }
 
-
-
-
 api_req_async::api_req_async(int th_id)
 {
     // printf("api_req_async=%d\n",th_id);
@@ -310,8 +305,17 @@ api_req_async::api_req_async(int th_id)
 api_req_async::~api_req_async()
 {
     // uv_loop_delete(loop);
-    // free(loop);
-    // free(curl_handle);
+    // uv_walk(
+    //     loop,
+    //     [](uv_handle_t *handle, void *arg)
+    //     {
+    //         printf("closing...%p\n", handle);
+    //         uv_close(handle, [](uv_handle_t *handle)
+    //                  { printf("closed...%p\n", handle); });
+    //         uv_run(handle->loop, UV_RUN_ONCE);
+    //     },
+    //     nullptr);
+    free(loop);
 }
 
 void *api_req_async::get_result()
@@ -321,7 +325,6 @@ void *api_req_async::get_result()
 
     return td;
 }
-
 
 struct Closure_handle_socket
 {
@@ -372,7 +375,6 @@ struct Closure_start_timeout
         return callback;
     }
 };
-
 
 void *api_req_async::run(void *data)
 {
