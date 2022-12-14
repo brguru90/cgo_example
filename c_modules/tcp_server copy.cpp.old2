@@ -4,7 +4,7 @@
 #define DEFAULT_BACKLOG 128
 using namespace std;
 
-map<int, StringType> responses;
+;
 
 typedef struct
 {
@@ -99,7 +99,7 @@ struct Closure_echo_read
 
 void my_tcp_server::on_new_connection(uv_stream_t *server, int status)
 {
-    // printf("server on_new_connection\n");
+    printf("server on_new_connection\n");
     if (status < 0)
     {
         printf("New incoming connection error %s\n", uv_strerror(status));
@@ -112,23 +112,35 @@ void my_tcp_server::on_new_connection(uv_stream_t *server, int status)
         StringType partial_response = echo_read(client, nread, buf);
         if (client->io_watcher.fd == -1 || partial_response.length <= 0)
             return;
+        printf(" connections_i=%d,partial_response!!!=len=%ld\n", client->io_watcher.fd, partial_response.length);
 
-        // printf(" connections_i=%d,partial_response!!!=len=%ld\n", client->io_watcher.fd, partial_response.length);
-        // printf("\nfd=%d,partial_response!!!!=begin=%s......end=%s\n",client->io_watcher.fd, my_str_slice(partial_response,0,20).ch,my_str_slice(partial_response,partial_response.length-20,20).ch);
+        printf("\nfd=%d,partial_response!!!!=begin=%s......end=%s\n", client->io_watcher.fd, my_str_slice(partial_response, 0, 20).ch, my_str_slice(partial_response, partial_response.length - 20, 20).ch);
 
         char end_of_data[] = "end_of_data";
+        // printf("\nfd=%d,partial_response!!!!=data=%s,len=%ld\n",client->io_watcher.fd, partial_response.ch, partial_response.length);
 
-        my_strcpy(responses[client->io_watcher.fd], partial_response.ch, partial_response.length);
+        // if (isSubString(partial_response, end_of_data)>=0)
+        // {
+        //     printf("\nfd=%d,partial_response!!!!=data=%s,len=%ld\n",client->io_watcher.fd, partial_response.ch, partial_response.length);
+        //     auto cb = *(ipc_received_cb_data_type *)client->loop->data;
+        //     cb(&partial_response, client);
+        // }
 
-        // printf("\nfd=%d,raw_response_loc1=data=%s,len=%ld,cond=%d\n",client->io_watcher.fd,  responses[client->io_watcher.fd].ch, responses[client->io_watcher.fd].length,isSubString(responses[client->io_watcher.fd], end_of_data));
-        if (isSubString(responses[client->io_watcher.fd], end_of_data) >= 0)
+        loop_data_type loop_data = *(loop_data_type *)client->loop->data;
+        responses_type local_responses = *loop_data.responses_ref;
+        // responses_type local_responses = responses;
+        printf("len before local_responses[client->io_watcher.fd]=%d\n",local_responses[client->io_watcher.fd].length);
+        my_strcpy(local_responses[client->io_watcher.fd], partial_response.ch, partial_response.length);
+
+        // printf("\nfd=%d,raw_response_loc1=data=%s,len=%ld,cond=%d\n",client->io_watcher.fd,  local_responses[client->io_watcher.fd].ch, local_responses[client->io_watcher.fd].length,isSubString(local_responses[client->io_watcher.fd], end_of_data));
+        if (isSubString(local_responses[client->io_watcher.fd], end_of_data) >= 0)
         {
-            // printf(" connections_i=%d,full_response!!!=len=%ld\n", client->io_watcher.fd, responses[client->io_watcher.fd].length);
-            // printf("\nfd=%d,full_response!!!!=begin=%s......end=%s\n", client->io_watcher.fd, my_str_slice(responses[client->io_watcher.fd], 0, 20).ch, my_str_slice(responses[client->io_watcher.fd], responses[client->io_watcher.fd].length - 20, 20).ch);
-            // printf("\nfd=%d,raw_response_loc!!!!=data=%s,len=%ld\n",client->io_watcher.fd, responses[client->io_watcher.fd].ch, responses[client->io_watcher.fd].length);
+            printf(" connections_i=%d,full_response!!!=len=%ld\n", client->io_watcher.fd, local_responses[client->io_watcher.fd].length);
+            printf("\nfd=%d,full_response!!!!=begin=%s......end=%s\n", client->io_watcher.fd, my_str_slice(local_responses[client->io_watcher.fd], 0, 20).ch, my_str_slice(local_responses[client->io_watcher.fd], local_responses[client->io_watcher.fd].length - 20, 20).ch);
+            // printf("\nfd=%d,raw_response_loc!!!!=data=%s,len=%ld\n",client->io_watcher.fd, local_responses[client->io_watcher.fd].ch, local_responses[client->io_watcher.fd].length);
             uv_read_stop(client);
-            auto cb = *(ipc_received_cb_data_type *)client->loop->data;
-            cb(&responses[client->io_watcher.fd], client);
+            auto cb = *loop_data.get_received_data_cb;
+            cb(&local_responses[client->io_watcher.fd], client);
         }
     };
     auto _closure_echo_read = Closure_echo_read::create<void>(echo_read_with_context);
@@ -137,8 +149,11 @@ void my_tcp_server::on_new_connection(uv_stream_t *server, int status)
     uv_tcp_init(loop, client);
     if (uv_accept(server, (uv_stream_t *)client) == 0)
     {
-        // printf("connection accepted-%d...\n", client->io_watcher.fd);
-        responses[client->io_watcher.fd].length = 0;
+        printf("connection accepted-%d,...\n", client->io_watcher.fd);
+        loop_data_type loop_data = *(loop_data_type *)client->loop->data;
+        responses_type local_responses = *loop_data.responses_ref;
+        // responses[client->io_watcher.fd].length = 0;
+        local_responses[client->io_watcher.fd].length = 0;
         // client->connect_req->handle->data=(int *)&temp;
         uv_read_start((uv_stream_t *)client, alloc_buffer_client, _closure_echo_read);
     }
@@ -216,7 +231,9 @@ int my_tcp_server::start_server()
 
 void my_tcp_server::register_ipc_received_callback(ipc_received_cb_data_type *get_received_data_cb)
 {
-    loop->data = get_received_data_cb;
+    loop_data.get_received_data_cb = get_received_data_cb;
+    loop_data.responses_ref = &responses;
+    loop->data = &loop_data;
 }
 
 void my_tcp_server::stop_server()

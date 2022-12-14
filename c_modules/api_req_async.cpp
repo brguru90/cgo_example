@@ -5,12 +5,7 @@ using namespace std;
 
 volatile bool curl_running = false;
 
-long long get_current_time()
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (((long long)tv.tv_sec) * 1e6) + (tv.tv_usec);
-}
+
 
 static size_t response_writer(void *data, size_t size, size_t nmemb, void *userp)
 {

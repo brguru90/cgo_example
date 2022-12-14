@@ -26,49 +26,49 @@ void on_exit(uv_process_t *req, int64_t exit_status, int term_signal)
     uv_close((uv_handle_t *)req, NULL);
 }
 
-void my_strcpy(StringType &dest, char *src, int length)
-{
-    int prev_length = dest.length;
-    char temp[prev_length];
-    // resize & repopulate
-    memcpy(&temp, dest.ch, prev_length);
-    dest.ch = (char *)malloc(sizeof(char *) * (prev_length + length + 1));
-    memcpy(dest.ch, &temp, prev_length);
-    int j = prev_length;
-    for (int i = 0; i < length; i++)
-    {
-        // printf("copy %02X ", dest.ch[prev_length + i]);
-        dest.ch[j + i] = src[i];
-    }
-    dest.length = prev_length + length;
-}
+// void my_strcpy(StringType &dest, char *src, int length)
+// {
+//     int prev_length = dest.length;
+//     char temp[prev_length];
+//     // resize & repopulate
+//     memcpy(&temp, dest.ch, prev_length);
+//     dest.ch = (char *)malloc(sizeof(char *) * (prev_length + length + 1));
+//     memcpy(dest.ch, &temp, prev_length);
+//     int j = prev_length;
+//     for (int i = 0; i < length; i++)
+//     {
+//         // printf("copy %02X ", dest.ch[prev_length + i]);
+//         dest.ch[j + i] = src[i];
+//     }
+//     dest.length = prev_length + length;
+// }
 
-int isSubString(StringType &dest, char end_of_data[])
-{
-    int i = dest.length;
-    // printf("i->%d,%d\n",i,i>=0);
-    int end_len = strlen(end_of_data);
-    while (i-- >= 0)
-    {
-        // printf("i->%d,%d\n",i,i>=0);
-        if (dest.ch[i] == end_of_data[end_len - 1])
-        {
-            for (int j = end_len - 1; j >= 0 && i >= 0; j--)
-            {
-                if (dest.ch[i--] == end_of_data[j])
-                {
-                    if (j == 0)
-                        return i + end_len + 1;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-    }
-    return -1;
-}
+// int isSubString(StringType &dest, char end_of_data[])
+// {
+//     int i = dest.length;
+//     // printf("i->%d,%d\n",i,i>=0);
+//     int end_len = strlen(end_of_data);
+//     while (i-- >= 0)
+//     {
+//         // printf("i->%d,%d\n",i,i>=0);
+//         if (dest.ch[i] == end_of_data[end_len - 1])
+//         {
+//             for (int j = end_len - 1; j >= 0 && i >= 0; j--)
+//             {
+//                 if (dest.ch[i--] == end_of_data[j])
+//                 {
+//                     if (j == 0)
+//                         return i + end_len + 1;
+//                 }
+//                 else
+//                 {
+//                     break;
+//                 }
+//             }
+//         }
+//     }
+//     return -1;
+// }
 
 int *receive_data_sockfd;
 bool ipc_server_ready = false;
@@ -104,15 +104,15 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 {
     auto cb = [&](StringType *raw_response, uv_stream_t *client_stream) -> void
     {
-        printf("------------get_received_data_cb-----------------\n");
-        ofstream MyFile("./json_bytes_c_recv.json");
-        MyFile << raw_response->ch;
-        MyFile.close();
-        // get_received_data_cb(raw_response);
+        // printf("------------get_received_data_cb-----------------\n");
+        // ofstream MyFile("./json_bytes_c_recv.json");
+        // MyFile << raw_response->ch;
+        // MyFile.close();
+        get_received_data_cb(raw_response);
         server.write2client(client_stream, end_of_data, strlen(end_of_data));
     };
     auto _closure_cb = Closure_my_tcp_server_cb::create<void>(cb);
-    printf("_closure_cb=%p\n", _closure_cb);
+    // printf("_closure_cb=%p\n", _closure_cb);
     server.register_ipc_received_callback(&_closure_cb);
     while (server.start_server() == -1)
     {
@@ -261,10 +261,16 @@ void send_data(char *serialized, int start)
     my_tcp_client client = my_tcp_client(htons(server.addr.sin_port));
     auto cb = [&](StringType *raw_response, uv_stream_t *client_stream) -> void
     {
+        // char buffer2[1024];
+        // snprintf(buffer2, sizeof(buffer2), "./json_bytes_c_send_%d.json", start);
+        // ofstream MyFile(buffer2);
+        // MyFile << main_raw_response.ch;
+        // MyFile.close();
+        // uv_write_t *req = client.stream2server(client_stream,main_raw_response,50);
         uv_write_t *req = client.write2server(client_stream, main_raw_response.ch, main_raw_response.length, nullptr);
         auto cb2 = [&](StringType *raw_response2, uv_stream_t *client_stream2)
         {
-            // printf("raw_response2=%s\n",raw_response2->ch);
+            // printf("\n\n\n\n\nraw_response2=%s\n",raw_response2->ch);
             // client.free_write_req(req);
             client.stop_client();
         };
@@ -388,15 +394,12 @@ void update_response_data(int thread_size, response_data *response_ref)
 {
     auto lamda = [&](StringType *raw_response) -> void
     {
-        ofstream MyFile("./json_bytes_c.json");
-        MyFile << raw_response->ch;
-        MyFile.close();
         printf("\n\nlen of raw final data from IPC->%ld,%ld\n", raw_response->length, strlen(raw_response->ch));
         raw_response->length = raw_response->length - strlen(end_of_data);
-        printf("\nlast char=%c", raw_response->ch[raw_response->length - 1]);
+        // printf("\nlast char=%c", raw_response->ch[raw_response->length - 1]);
         // printf("\n\nraw final data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
         // char tmp[raw_response->length];
-        char *tmp = (char *)malloc(sizeof(char *) * (raw_response->length + 1));
+        char *tmp = (char *)malloc(sizeof(char) * (raw_response->length + 1));
         bzero(tmp, raw_response->length + 1);
         memcpy(tmp, raw_response->ch, raw_response->length);
         // tmp[raw_response->length]='\0';
@@ -410,7 +413,7 @@ void update_response_data(int thread_size, response_data *response_ref)
         //     printf("%c-%02X ", tmp[i],tmp[i]);
         // }
         // printf("\n");
-        printf("\n\nlen of final data from IPC->%ld\n", strlen(tmp));
+        // printf("\n\nlen of final data from IPC->%ld\n", strlen(tmp));
         response_deserialized_type *response_deserialized = json_to_thread_data(tmp, raw_response->length);
         // printf("response_deserialized len=%d\n", response_deserialized->len);
         // // for (int l = 0; l < raw_response->length; l++)
@@ -570,6 +573,7 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             // for (int l = 0; l < sizeof(bytes); l++)
             //     printf("%02X ", bytes[l]);
             // printf("\n");
+            printf("--------- end %d -------------\n",p);
             send_data(serialized, start);
             exit(0);
         }

@@ -44,6 +44,22 @@ uv_write_t *my_tcp_client::write2server(uv_stream_t *stream, char *data, size_t 
     return req;
 }
 
+uv_write_t *my_tcp_client::stream2server(uv_stream_t *stream, StringType data,int chunk_size){
+    uv_write_t *req=nullptr;
+    if(chunk_size<=0) chunk_size=50;
+    int part=ceil(data.length/chunk_size);
+    for(int i=0;i<=part;i++){
+        StringType chunk_data=my_str_slice(data,i*chunk_size,chunk_size);
+        // printf("chunk_size=%s,size=%ld,len=%ld\n",chunk_data.ch,chunk_data.length,strlen(chunk_data.ch));
+        if(req==nullptr){
+            req = write2server(stream, chunk_data.ch, chunk_data.length, nullptr);
+        } else{
+            write2server(stream, chunk_data.ch, chunk_data.length, req);
+        }
+    }
+    return req;
+}
+
 void my_tcp_client::echo_read(uv_stream_t *client_stream, ssize_t nread, const uv_buf_t *buf,ipc_received_cb_data_type *cb )
 {
     if (nread > 0)
@@ -64,7 +80,7 @@ void my_tcp_client::echo_read(uv_stream_t *client_stream, ssize_t nread, const u
     if (nread < 0)
     {
         if (nread != UV_EOF)
-            fprintf(stderr, "Read error %s\n", uv_err_name(nread));
+            fprintf(stderr, "Client Read error %s\n", uv_err_name(nread));
         uv_close((uv_handle_t *)client_stream, NULL);
     }
 
@@ -96,23 +112,6 @@ struct Closure_echo_read
     }
 };
 
-void my_tcp_client::on_connect(uv_connect_t *client, int status)
-{
-    printf("on_connect\n");
-    if (status < 0)
-    {
-        printf("New client connection error %s,port=%d\n", uv_strerror(status), DEFAULT_PORT);
-        // error!
-        return;
-    }
-    printf("connected...\n");
-
-    uv_stream_t *stream = client->handle;
-    // free(client);
-    StringType *raw_response;
-    get_received_data_cb(raw_response, stream);
-    free(raw_response);
-}
 
 void my_tcp_client::read_response(uv_stream_t *stream, ipc_received_cb_data_type *cb)
 {
@@ -123,6 +122,25 @@ void my_tcp_client::read_response(uv_stream_t *stream, ipc_received_cb_data_type
     auto _closure_echo_read = Closure_echo_read::create<void>(echo_read_with_context);
     uv_read_start(stream, alloc_buffer, _closure_echo_read);
 }
+
+void my_tcp_client::on_connect(uv_connect_t *client, int status)
+{
+    // printf("client on_connect\n");
+    if (status < 0)
+    {
+        printf("New client connection error %s,port=%d\n", uv_strerror(status), DEFAULT_PORT);
+        // error!
+        return;
+    }
+    // printf("client connected...\n");
+
+    uv_stream_t *stream = client->handle;
+    // free(client);
+    StringType *raw_response;
+    get_received_data_cb(raw_response, stream);
+    free(raw_response);
+}
+
 
 struct Closure_on_connect
 {

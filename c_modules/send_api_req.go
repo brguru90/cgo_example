@@ -17,7 +17,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"os"
 	"reflect"
 	"runtime"
 
@@ -140,7 +139,7 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 //export json_to_thread_data
 func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_ResponseDeserialized {
 	go_str_len := uint64(str_len)
-	println("go_str_len", go_str_len)
+	// println("go_str_len", go_str_len)
 	mySlice := (*[1 << 30]byte)(unsafe.Pointer(json_data))[:go_str_len:go_str_len]
 
 	// err2 := os.WriteFile("./json_bytes.json", mySlice, 0644)
@@ -156,8 +155,8 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 	if err != nil {
 		// println(string(mySlice))
 		// fmt.Printf("mystr:\t %02X \n", mySlice)
-		err2 := os.WriteFile("./json_bytes_go.json", mySlice, 0644)
-		check_error(err2)
+		// err2 := os.WriteFile("./json_bytes_go.json", mySlice, 0644)
+		// check_error(err2)
 
 		check_error(err)
 		returnStruct.data = nil
@@ -224,9 +223,9 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 
 func Call_api() {
 	// debug.SetGCPercent(-1)
-	total_requests := 4
+	total_requests := 4500
 	// url := "http://localhost:8000/api/hello/1?query=text"
-	url := "http://localhost:8000/api/user/"
+	url := "http://127.0.0.1:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
 	// url:="https://jsonplaceholder.typicode.com/posts"
 	// url:="https://google.com/"
@@ -276,10 +275,10 @@ func Call_api() {
 	runtime.KeepAlive(bulk_response_data)
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()), 0)
 
-	for i = 0; i < total_requests; i++ {
-		// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
-		fmt.Println("go status=", int(bulk_response_data[i].Status_code))
-	}
+	// for i = 0; i < total_requests; i++ {
+	// 	// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
+	// 	fmt.Println("go status=", int(bulk_response_data[i].Status_code))
+	// }
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
 	// 	fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))

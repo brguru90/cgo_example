@@ -101,6 +101,8 @@ typedef struct BytesType
     long length;
 } bytes_type;
 
+
+
 typedef struct StringType
 {
     char *ch;

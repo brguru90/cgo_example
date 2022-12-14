@@ -42,11 +42,6 @@ typedef struct ThreadData
 
 typedef void (*ipc_received_cb_data_type)(StringType *raw_response, uv_stream_t *client_stream);
 
-typedef struct LoopData
-{
-    ipc_received_cb_data_type *get_received_data_cb;
-
-} loop_data_type;
 
 class my_tcp_server
 {
@@ -54,11 +49,24 @@ private:
     uv_loop_t *loop;
     uv_tcp_t server;
     int DEFAULT_PORT;
+    int connections_i=0;
     typedef struct
     {
         uv_write_t req;
         uv_buf_t buf;
     } write_req_t;
+
+
+    // typedef std::map<int, StringType> responses_type;
+    // responses_type responses;
+
+    // typedef struct loop_data_struct
+    // {
+    //    ipc_received_cb_data_type *get_received_data_cb;
+    //    responses_type *responses_ref;
+    // } loop_data_type;
+    // loop_data_type loop_data;
+
 
     void on_new_connection(uv_stream_t *server, int status);
     StringType echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf);
@@ -66,7 +74,6 @@ private:
 public:
     int server_ready = 0;
     struct sockaddr_in addr;
-    loop_data_type *loop_data;
     my_tcp_server(int port);
     void register_ipc_received_callback(ipc_received_cb_data_type *get_received_data_cb);
     void write2client(uv_stream_t *stream, char *data, size_t len2);
@@ -81,11 +88,13 @@ private:
     uv_tcp_t client;
     int DEFAULT_PORT;
     ipc_received_cb_data_type get_received_data_cb;
-    typedef struct
+
+    typedef struct 
     {
         uv_write_t req;
         uv_buf_t buf;
     } write_req_t;
+
 
     void on_connect(uv_connect_t *client, int status);
     void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf, ipc_received_cb_data_type *cb);
@@ -95,8 +104,16 @@ public:
     my_tcp_client(int port);
     void register_ipc_received_callback(ipc_received_cb_data_type *get_received_data_cb);
     uv_write_t *write2server(uv_stream_t *stream, char *data, size_t len2, uv_write_t *req);
+    uv_write_t *stream2server(uv_stream_t *stream, StringType data,int chunk_size);
     void read_response(uv_stream_t *stream, ipc_received_cb_data_type *cb);
     void free_write_req(uv_write_t *req);
     int start_client();
     void stop_client();
 };
+
+
+
+void my_strcpy(StringType &dest, char *src, int length);
+StringType my_str_slice(StringType src, int start, int length);
+int isSubString(StringType &dest, char end_of_data[]);
+long long get_current_time();
