@@ -230,15 +230,15 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
     // close(sockfd);
 }
 
-void send_data(char *serialized, int start)
+void send_data(string_type main_raw_response, int start)
 {
-    int _size = strlen(serialized) + strlen(end_of_data);
+    // int _size = serialized.length + strlen(end_of_data);
     // char bytes[_size];
     // memcpy(bytes, serialized, strlen(serialized));
 
-    StringType main_raw_response;
-    main_raw_response.length = 0;
-    my_strcpy(main_raw_response, serialized, strlen(serialized));
+    // StringType main_raw_response;
+    // main_raw_response.length = 0;
+    // my_strcpy(main_raw_response, serialized, strlen(serialized));
     my_strcpy(main_raw_response, end_of_data, strlen(end_of_data));
 
     // char buffer2[1024];
@@ -555,8 +555,10 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
                 // printf("Response_body1=>%d,%d) %s\n",m,k,td_arr[m].Response_body);
             }
             // printf("start=%d,end=%d,len=%d\n",start,end,end-start+1);
-            char *serialized = thread_data_to_json(td_arr, end - start + 1, start, end);
+            printf("--------- event loop end  -------------\n");
+            string_type serialized = thread_data_to_json(td_arr, end - start + 1, start, end);
             threads_data[p].api_req_async_on_thread->~api_req_async();
+            printf("--------- serialize end  -------------\n");
 
             // char buffer[1024];
             // snprintf(buffer, sizeof(buffer),"./json_bytes1_%d.json",start);
@@ -573,7 +575,6 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             // for (int l = 0; l < sizeof(bytes); l++)
             //     printf("%02X ", bytes[l]);
             // printf("\n");
-            printf("--------- end %d -------------\n",p);
             send_data(serialized, start);
             exit(0);
         }

@@ -83,7 +83,8 @@ type thread_data_to_json_type struct {
 }
 
 //export thread_data_to_json
-func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end C.int) *C.char {
+func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end C.int) C.struct_StringType {
+	
 	// carray2slice(td, int(_len))
 	// p := (*unsafe.Pointer)(unsafe.Pointer(&td))
 	// var i int
@@ -120,20 +121,34 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 			Err_code:                      int(td_item.Status_code),
 		})
 	}
+
 	serialize_to := thread_data_to_json_type{
 		Data:  td_slice,
 		Start: int(start),
 		End:   int(end),
 	}
+	println("thread_data_to_json",int(_len))
+	// json.Marshal freezes on large data
 	_json_bytes, err := json.Marshal(serialize_to)
+
 	if err != nil {
-		return C.CString("")
+		return C.struct_StringType{}
 	}
 	// err2 := os.WriteFile(fmt.Sprintf("./json_bytes_%d.json",int(start)), _json_bytes, 0644)
 	// check_error(err2)
+	// string(_json_bytes) freezes on some data
 	// fmt.Println(string(_json_bytes))
-	return C.CString(string(_json_bytes))
+	// println("thread_data_to_json2",len(string(_json_bytes)))
+	// return C.CString(string(_json_bytes))
 	// return C.CString("")
+	cb:=C.CBytes(_json_bytes)
+	// defer C.free(unsafe.Pointer(cb))
+	println("thread_data_to_json",len(_json_bytes))
+	// return  (*C.char)(cb)	
+	return  C.struct_StringType{
+		ch:(*C.char)(cb),
+		length:C.ulong(len(_json_bytes)),
+	}
 }
 
 //export json_to_thread_data
@@ -223,7 +238,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 
 func Call_api() {
 	// debug.SetGCPercent(-1)
-	total_requests := 4500
+	total_requests := 5000
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://127.0.0.1:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
