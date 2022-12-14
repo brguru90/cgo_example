@@ -558,7 +558,7 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             printf("--------- event loop end  -------------\n");
             string_type serialized = thread_data_to_json(td_arr, end - start + 1, start, end);
             threads_data[p].api_req_async_on_thread->~api_req_async();
-            printf("--------- serialize end  -------------\n");
+            printf("--------- serialized end  -------------\n");
 
             // char buffer[1024];
             // snprintf(buffer, sizeof(buffer),"./json_bytes1_%d.json",start);

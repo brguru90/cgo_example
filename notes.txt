@@ -1,2 +1,4 @@
 go struct to binary
 https://stackoverflow.com/questions/16330490/in-go-how-can-i-convert-a-struct-to-a-byte-array
+
+https://medium.com/@maximgradan/serialize-a-struct-to-bytes-to-send-it-through-the-network-in-go-part-i-b861c15d2f06
