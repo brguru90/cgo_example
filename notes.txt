@@ -1,0 +1,2 @@
+go struct to binary
+https://stackoverflow.com/questions/16330490/in-go-how-can-i-convert-a-struct-to-a-byte-array
