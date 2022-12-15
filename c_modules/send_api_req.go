@@ -17,20 +17,17 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/gob"
-	"reflect"
-	"runtime"
-
-	// "encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"net/http"
+	"reflect"
+	"runtime"
+	"runtime/debug"
 
-	// "reflect"
 	"strconv"
 
-	// "strconv"
 	"strings"
 	"unsafe"
 )
@@ -189,7 +186,7 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 		return returnStruct
 	}
 	response_data_c_array := C.malloc(C.size_t(len(response_data.Data)) * C.sizeof_struct_ResponseData)
-	defer C.free(unsafe.Pointer(response_data_c_array))
+	// defer C.free(unsafe.Pointer(response_data_c_array))
 	response_data_c_slice := (*[1<<30 - 1]C.struct_ResponseData)(response_data_c_array)
 	// response_data_c_slice := make([]C.struct_ResponseData, len(response_data.Data))
 	for i, rd := range response_data.Data {
@@ -212,6 +209,7 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 			Err_code:                      C.int(rd.Err_code),
 		}
 	}
+	println("json_to_thread_data2",len(response_data_c_slice))
 	returnStruct.data = (*C.struct_ResponseData)(response_data_c_array)
 	returnStruct.len = C.int(len(response_data.Data))
 	returnStruct.start = C.int(response_data.Start)
@@ -246,7 +244,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 
 func Call_api() {
 	// debug.SetGCPercent(-1)
-	total_requests := 50000
+	total_requests := 100000
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://127.0.0.1:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
@@ -290,18 +288,21 @@ func Call_api() {
 	}
 
 	bulk_response_data := make([]C.struct_ResponseData, total_requests)
+
+
 	ram_size_in_GB := float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE)) / (1024 * 1024)
 	nor_of_thread := math.Ceil(ram_size_in_GB / 70)
 	fmt.Println("go Nor of threads", nor_of_thread)
 
-	runtime.KeepAlive(request_input)
-	runtime.KeepAlive(bulk_response_data)
+	// runtime.KeepAlive(request_input)
+	// runtime.KeepAlive(bulk_response_data)
+	debug.SetGCPercent(-1)
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()), 0)
-
-	// for i = 0; i < total_requests; i++ {
-	// 	// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
-	// 	fmt.Println("go status=", int(bulk_response_data[i].Status_code))
-	// }
+	debug.SetGCPercent(100)
+	for i = 0; i < total_requests; i++ {
+		// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
+		fmt.Print("go status=", int(bulk_response_data[i].Status_code),",")
+	}
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))
 	// 	fmt.Println(int(bulk_response_data[i].status_code),C.GoString(bulk_response_data[i].response_body))
@@ -314,4 +315,5 @@ func Call_api() {
 	// resp, err := parseHttpResponse(C.GoString(response_data.response_header), C.GoString(response_data.response_body), nil)
 	// body2, err := ioutil.ReadAll(resp.Body)
 	// fmt.Println(string(body2), err)
+	println("\n------------ go end --------------")
 }
