@@ -26,8 +26,6 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"strconv"
-
 	"strings"
 	"unsafe"
 )
@@ -39,13 +37,6 @@ func check_error(err error) {
 }
 
 func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData {
-	// var i int
-	// for i = 0; i < len; i++ {
-	// 	p:=(*C.struct_ResponseData)(unsafe.Pointer(uintptr(unsafe.Pointer(array))+(uintptr(i)*(C.sizeof_struct_ResponseData))))
-	// 	println("Response_body2=>", C.GoString(p.Response_body), "<=")
-	// }
-
-	// still issue exists
 	var list []C.struct_ResponseData
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
 	sliceHeader.Cap = len
@@ -82,19 +73,6 @@ type thread_data_to_json_type struct {
 //export thread_data_to_json
 func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end C.int) C.struct_StringType {
 	
-	// carray2slice(td, int(_len))
-	// p := (*unsafe.Pointer)(unsafe.Pointer(&td))
-	// var i int
-	// for i=0;i<int(_len);i++{
-	// 	if p!=nil && (*C.struct_ResponseData)(C.ptr_at(p, C.int(i)))!=nil{
-	// 		println("pointer",C.GoString((*C.struct_ResponseData)(C.ptr_at(p, C.int(i))).Response_body))
-	// 	} else{
-	// 		// println("i=",i)
-	// 	}
-	// }
-	// println("pointer",C.GoString((*C.struct_ResponseData)(C.ptr_at(p, C.int(0))).Response_body))
-	// // fmt.Println("with c help",(*C.struct_ResponseData)(C.ptr_at(p, C.int(0))).Status_code )
-
 	td_arr := carray2slice(td, int(_len))
 	td_slice := []ResponseDataCMap{}
 
@@ -124,12 +102,12 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 		Start: int(start),
 		End:   int(end),
 	}
-	println("thread_data_to_json",_len)
+	// println("thread_data_to_json",_len)
 	// json.Marshal freezes on large data
 	var struct_in_bytes bytes.Buffer 
 	enc:=gob.NewEncoder(&struct_in_bytes) 
 	err := enc.Encode(serialize_to)
-	println("thread_data_to_json2",struct_in_bytes.Len())
+	// println("thread_data_to_json2",struct_in_bytes.Len())
 	// _json_bytes, err := json.Marshal(serialize_to)
 	if err != nil {
 		return C.struct_StringType{}
@@ -153,7 +131,7 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 //export json_to_thread_data
 func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_ResponseDeserialized {
 	go_str_len := uint64(str_len)
-	println("go_str_len", go_str_len)
+	// println("go_str_len", go_str_len)
 	mySlice := (*[1 << 30]byte)(unsafe.Pointer(json_data))[:go_str_len:go_str_len]
 
 	// err2 := os.WriteFile("./json_bytes.json", mySlice, 0644)
@@ -170,6 +148,7 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 
 	var response_data thread_data_to_json_type
 	err := dec.Decode(&response_data)
+
 	println("json_to_thread_data",len(response_data.Data))
 	// err := json.Unmarshal(mySlice, &response_data)
 	if err != nil {
@@ -190,7 +169,7 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 	response_data_c_slice := (*[1<<30 - 1]C.struct_ResponseData)(response_data_c_array)
 	// response_data_c_slice := make([]C.struct_ResponseData, len(response_data.Data))
 	for i, rd := range response_data.Data {
-		// fmt.Println("desrialise Response_body",rd)
+		// fmt.Println("desrialise Response_body",rd.Status_code)
 		response_data_c_slice[i] = C.struct_ResponseData{
 			Debug:                         C.int(rd.Debug),
 			Uid:                           C.CString(rd.Uid),
@@ -244,7 +223,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 
 func Call_api() {
 	// debug.SetGCPercent(-1)
-	total_requests := 100000
+	total_requests := 4000
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://127.0.0.1:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
@@ -277,7 +256,9 @@ func Call_api() {
 
 	for i = 0; i < total_requests; i++ {
 		request_input[i] = C.struct_SingleRequestInput{
-			url: C.CString("http://localhost:8000/api/test/" + strconv.Itoa(i)),
+			// url: C.CString("http://localhost:8000/api/test/" + strconv.Itoa(i)),
+
+			url: C.CString("http://127.0.0.1:8040/"),
 			// url:         C.CString(req.URL.String()),
 			method:      C.CString(req.Method),
 			headers:     (*C.struct_Headers)(c_headers),
@@ -299,9 +280,19 @@ func Call_api() {
 	debug.SetGCPercent(-1)
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()), 0)
 	debug.SetGCPercent(100)
+	var status_codes=make(map[int]int)
 	for i = 0; i < total_requests; i++ {
 		// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
-		fmt.Print("go status=", int(bulk_response_data[i].Status_code),",")
+		// fmt.Print("go status=", int(bulk_response_data[i].Status_code),",")
+		_,ok:=status_codes[int(bulk_response_data[i].Status_code)]
+		if ok{
+			status_codes[int(bulk_response_data[i].Status_code)]++
+		} else{
+			status_codes[int(bulk_response_data[i].Status_code)]=1
+		}
+	}
+	for k, v := range status_codes {
+		fmt.Printf("status_code=%d,count=%d\n",k,v)
 	}
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))

@@ -291,10 +291,7 @@ int api_req_async::handle_socket(CURL *easy, curl_socket_t s, int action, void *
 
 api_req_async::api_req_async(int th_id)
 {
-    // printf("api_req_async=%d\n",th_id);
     thread_id = th_id;
-    // curl_handle = multi_handler;
-    // loop = uv_loop_new();
 }
 
 api_req_async::~api_req_async()
@@ -388,7 +385,7 @@ void *api_req_async::run(void *data)
         return NULL;
     }
 
-    printf("1-curl_handle=%ld,loop-%ld\n", (long)curl_handle, (long)loop);
+    // printf("thread=%d,curl_handle=%ld,loop-%ld\n", thread_id,(long)curl_handle, (long)loop);
 
     this->data = data;
 
@@ -421,6 +418,7 @@ void *api_req_async::run(void *data)
     {
         add_request_to_event_loop(&(td->req_inputs_ptr[i]), &(td->response_ref_ptr[i]), td->debug_flag);
     }
+    printf("%d request added in %d-process\n",td->th_pool_data.end_index-td->th_pool_data.start_index+1,getpid());
     uv_run(loop, UV_RUN_DEFAULT);
 
     curl_multi_cleanup(curl_handle);

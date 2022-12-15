@@ -6,6 +6,12 @@
 #include <map>
 
 
+
+void my_strcpy(StringType &dest, char *src, long long length);
+StringType my_str_slice(StringType src, int start, int length);
+int isSubString(StringType &dest, char end_of_data[]);
+long long get_current_time();
+
 class api_req_async
 {
 private:
@@ -102,6 +108,7 @@ private:
 public:
     struct sockaddr_in addr;
     my_tcp_client(int port);
+    ~my_tcp_client();
     void register_ipc_received_callback(ipc_received_cb_data_type *get_received_data_cb);
     uv_write_t *write2server(uv_stream_t *stream, char *data, size_t len2, uv_write_t *req);
     uv_write_t *stream2server(uv_stream_t *stream, StringType data,int chunk_size);
@@ -113,7 +120,3 @@ public:
 
 
 
-void my_strcpy(StringType &dest, char *src, int length);
-StringType my_str_slice(StringType src, int start, int length);
-int isSubString(StringType &dest, char end_of_data[]);
-long long get_current_time();

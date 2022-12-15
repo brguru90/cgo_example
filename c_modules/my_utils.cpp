@@ -32,18 +32,21 @@ int isSubString(StringType &dest, char end_of_data[])
     return -1;
 }
 
-void my_strcpy(StringType &dest, char *src, int length)
+void my_strcpy(StringType &dest, char *src, long long length)
 {
     if (length <= 0)
         return;
-    int prev_length = dest.length;
-    char temp[prev_length];
+    long long prev_length = dest.length;
+    // printf("========my_strcpy==========\n");
+    // char temp[prev_length];
+    char *temp=(char *)malloc(sizeof(char) * (prev_length + 1));
     // resize & repopulate
-    memcpy(&temp, dest.ch, prev_length);
+    memmove(temp, dest.ch, prev_length);
     dest.ch = (char *)malloc(sizeof(char) * (prev_length + length + 1));
-    memcpy(dest.ch, &temp, prev_length);
-    int j = prev_length;
-    for (int i = 0; i < length; i++)
+    memmove(dest.ch, temp, prev_length);
+    // dest.ch = (char *)realloc(dest.ch ,sizeof(char) * (prev_length + length + 1));
+    long long j = prev_length;
+    for (long long i = 0; i < length; i++)
     {
         // printf("copy %02X ", dest.ch[prev_length + i]);
         dest.ch[j + i] = src[i];

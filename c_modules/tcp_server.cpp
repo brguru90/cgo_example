@@ -56,7 +56,7 @@ StringType my_tcp_server::echo_read(uv_stream_t *client_stream, ssize_t nread, c
         StringType temp;
         // raw_response.ch = req->buf.base;
         // raw_response.length = req->buf.len;
-        my_strcpy(raw_response, req->buf.base, req->buf.len);
+        my_strcpy(raw_response, req->buf.base, (long long)req->buf.len);
         return raw_response;
     }
     if (nread < 0)
@@ -118,7 +118,7 @@ void my_tcp_server::on_new_connection(uv_stream_t *server, int status)
 
         char end_of_data[] = "end_of_data";
 
-        my_strcpy(responses[client->io_watcher.fd], partial_response.ch, partial_response.length);
+        my_strcpy(responses[client->io_watcher.fd], partial_response.ch, (long long)partial_response.length);
 
         // printf("\nfd=%d,raw_response_loc1=data=%s,len=%ld,cond=%d\n",client->io_watcher.fd,  responses[client->io_watcher.fd].ch, responses[client->io_watcher.fd].length,isSubString(responses[client->io_watcher.fd], end_of_data));
         if (isSubString(responses[client->io_watcher.fd], end_of_data) >= 0)

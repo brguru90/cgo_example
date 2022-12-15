@@ -78,7 +78,7 @@ void receive_data(int thread_size, get_received_data_type get_received_data_cb)
 
 void send_data(string_type main_raw_response, int start)
 {
-    my_strcpy(main_raw_response, end_of_data, strlen(end_of_data));
+    my_strcpy(main_raw_response, end_of_data, (long long)(strlen(end_of_data)));
 
     // printf("data to send2=%s,len=%ld\n", bytes, strlen(bytes));
     // for (int l = 0; l < strlen(bytes); l++)
@@ -139,14 +139,16 @@ void update_response_data(int thread_size, response_data *response_ref)
 {
     auto lamda = [&](StringType *raw_response) -> void
     {
-        printf("\n\nlen of raw final data from IPC->%ld,%ld\n", raw_response->length, strlen(raw_response->ch));
+        size_t orig_len=raw_response->length;
+        printf("\n\nlen of raw final data from IPC(recv)->%ld\n", raw_response->length);
         raw_response->length = raw_response->length - strlen(end_of_data);
         // printf("\nlast char=%c", raw_response->ch[raw_response->length - 1]);
         // printf("\n\nraw final data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
         // char tmp[raw_response->length];
         char *tmp = (char *)malloc(sizeof(char) * (raw_response->length + 1));
-        bzero(tmp, raw_response->length + 1);
-        memcpy(tmp, raw_response->ch, raw_response->length);
+        size_t final_len=raw_response->length;
+        bzero(tmp, final_len + 1);
+        memmove(tmp, raw_response->ch, final_len);        
         // tmp[raw_response->length]='\0';
         // raw_response->length++;
         // for(int i=raw_response->length-10;i<raw_response->length;i++){
@@ -158,8 +160,8 @@ void update_response_data(int thread_size, response_data *response_ref)
         //     printf("%c-%02X ", tmp[i],tmp[i]);
         // }
         // printf("\n");
-        // printf("\n\nlen of final data from IPC->%ld\n", strlen(tmp));
-        response_deserialized_type *response_deserialized = json_to_thread_data(tmp, raw_response->length);
+        printf("\n\nlen of final data from IPC->%ld\n", final_len);
+        response_deserialized_type *response_deserialized = json_to_thread_data(tmp,(size_t)final_len);
         // printf("response_deserialized len=%d\n", response_deserialized->len);
         // // for (int l = 0; l < raw_response->length; l++)
         // //     printf("%02X ", raw_response->ch[l]);
@@ -169,7 +171,8 @@ void update_response_data(int thread_size, response_data *response_ref)
             response_ref[i] = response_deserialized->data[i - response_deserialized->start];
         }
         free(response_deserialized);
-
+        bzero(raw_response->ch, orig_len);
+        free(raw_response->ch);
     };
     // auto *closure = new std::function<void(StringType *raw_response)>(lamda);
     auto lamda_with_context = Closure_raw_response::create<void>(lamda);
@@ -301,10 +304,10 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
                 // printf("Response_body1=>%d,%d) %s\n",m,k,td_arr[m].Response_body);
             }
             // printf("start=%d,end=%d,len=%d\n",start,end,end-start+1);
-            printf("--------- event loop end  -------------\n");
+            printf("--------- event loop ended  -------------\n");
             string_type serialized = thread_data_to_json(td_arr, end - start + 1, start, end);
             threads_data[p].api_req_async_on_thread->~api_req_async();
-            printf("--------- serialized end  -------------\n");
+            free(td_arr);
 
             // char buffer[1024];
             // snprintf(buffer, sizeof(buffer),"./json_bytes1_%d.json",start);
@@ -321,6 +324,7 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             // for (int l = 0; l < sizeof(bytes); l++)
             //     printf("%02X ", bytes[l]);
             // printf("\n");
+            printf("--------- serializer ended - start=%d,len=%ld -------------\n", start, serialized.length);
             send_data(serialized, start);
             exit(0);
         }
@@ -379,13 +383,17 @@ void send_request_in_concurrently(request_input *req_inputs, response_data *resp
         threads_data[i].api_req_async_on_thread = new api_req_async(i);
     }
 
+    printf("waiting for IPC server.server_ready\n");
     while (server.server_ready == 0)
     {
         usleep(200);
     }
+    printf("IPC server.server_ready\n");
 
     create_process(thread_size, total_requests, threads, threads_data, proc_data);
     // close(*receive_data_sockfd);
+    free(threads);
+    free(threads_data);
 
     printf("\n\n--------- c end -----------\n\n");
 }

@@ -35,7 +35,6 @@ uv_write_t *my_tcp_client::write2server(uv_stream_t *stream, char *data, size_t 
 {
     uv_buf_t buffer[] = {
         {.base = data, .len = len2}};
-    // printf("write2server=%s\n", data);
     if (req == nullptr)
     {
         req = (uv_write_t *)malloc(sizeof(uv_write_t));
@@ -180,6 +179,7 @@ int my_tcp_client::start_client()
     uv_connect_t *pConn = (uv_connect_t *)malloc(sizeof(uv_connect_t));
     uv_tcp_connect(pConn, &client, (const struct sockaddr *)&addr, _closure_on_connect);
     return uv_run(loop, UV_RUN_DEFAULT);
+    free(pConn);
 }
 
 void my_tcp_client::register_ipc_received_callback(ipc_received_cb_data_type *get_received_data_cb)
@@ -196,4 +196,9 @@ my_tcp_client::my_tcp_client(int port)
 {
     this->DEFAULT_PORT = port;
     loop = uv_loop_new();
+}
+
+my_tcp_client::~my_tcp_client()
+{
+    free(loop);
 }
