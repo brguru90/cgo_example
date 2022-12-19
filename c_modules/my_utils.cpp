@@ -37,18 +37,19 @@ void my_strcpy(StringType &dest, char *src, long long length)
     if (length <= 0)
         return;
     long long prev_length = dest.length;
-    // printf("========my_strcpy==========\n");
-    // char temp[prev_length];
-    char *temp=(char *)malloc(sizeof(char) * (prev_length + 1));
+    // char temp_dest[prev_length];
+   
+    char *temp_dest=(char *)malloc(sizeof(char) * (prev_length + 1));
     // resize & repopulate
-    memmove(temp, dest.ch, prev_length);
+    memmove(temp_dest, dest.ch, prev_length);
     dest.ch = (char *)malloc(sizeof(char) * (prev_length + length + 1));
-    memmove(dest.ch, temp, prev_length);
+    memmove(dest.ch, temp_dest, prev_length);
     // dest.ch = (char *)realloc(dest.ch ,sizeof(char) * (prev_length + length + 1));
     long long j = prev_length;
     for (long long i = 0; i < length; i++)
     {
         // printf("copy %02X ", dest.ch[prev_length + i]);
+        // printf("%c ", dest.ch[prev_length + i]);
         dest.ch[j + i] = src[i];
     }
     dest.length = prev_length + length;

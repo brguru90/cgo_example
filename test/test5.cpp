@@ -98,12 +98,16 @@ int main()
     // char mmm[]="guru";
 
     unsigned char bytes[sizeof(c)];
-    if (!fork())
-    {
-        memcpy(bytes, &c, sizeof(c));
-        exit(0);
-        // bytes[sizeof(*c3)]='\0';
-    }
+    // if (!fork())
+    // {
+    //     memcpy(bytes, &c, sizeof(c));
+    //     exit(0);
+    //     // bytes[sizeof(*c3)]='\0';
+    // }
+    // free(c2);
+    memcpy(bytes, c2, sizeof(c2));
+
+    
 
     char *my_s_bytes = reinterpret_cast<char *>(c3);
 
@@ -116,6 +120,15 @@ int main()
 
     printf("\n%d\n", *tmp.child1->child2->a);
     printf("%s\n", tmp.child1->child2->name);
+
+    char *s1="guru";
+    char *s2=(char*)malloc(sizeof(char*)* strlen(s1));
+    memmove(s2, s1,strlen(s1));
+    char *s3=(char*)malloc(sizeof(char*)* strlen(s2));
+    memmove(s3, s2, strlen(s2));
+    free(s2);
+    printf("s3=%s\n",s3);
+
 
     return 0;
 }

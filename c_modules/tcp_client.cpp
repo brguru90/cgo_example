@@ -43,36 +43,36 @@ uv_write_t *my_tcp_client::write2server(uv_stream_t *stream, char *data, size_t 
     return req;
 }
 
-uv_write_t *my_tcp_client::stream2server(uv_stream_t *stream, StringType data,int chunk_size){
-    uv_write_t *req=nullptr;
-    if(chunk_size<=0) chunk_size=50;
-    int part=ceil(data.length/chunk_size);
-    for(int i=0;i<=part;i++){
-        StringType chunk_data=my_str_slice(data,i*chunk_size,chunk_size);
-        // printf("chunk_size=%s,size=%ld,len=%ld\n",chunk_data.ch,chunk_data.length,strlen(chunk_data.ch));
-        if(req==nullptr){
-            req = write2server(stream, chunk_data.ch, chunk_data.length, nullptr);
-        } else{
-            write2server(stream, chunk_data.ch, chunk_data.length, req);
-        }
-    }
-    return req;
-}
+// uv_write_t *my_tcp_client::stream2server(uv_stream_t *stream, StringType data,int chunk_size){
+//     uv_write_t *req=nullptr;
+//     if(chunk_size<=0) chunk_size=50;
+//     int part=ceil(data.length/chunk_size);
+//     for(int i=0;i<=part;i++){
+//         StringType chunk_data=my_str_slice(data,i*chunk_size,chunk_size);
+//         // printf("chunk_size=%s,size=%ld,len=%ld\n",chunk_data.ch,chunk_data.length,strlen(chunk_data.ch));
+//         if(req==nullptr){
+//             req = write2server(stream, chunk_data.ch, chunk_data.length, nullptr);
+//         } else{
+//             write2server(stream, chunk_data.ch, chunk_data.length, req);
+//         }
+//     }
+//     return req;
+// }
 
 void my_tcp_client::echo_read(uv_stream_t *client_stream, ssize_t nread, const uv_buf_t *buf,ipc_received_cb_data_type *cb )
 {
+    StringType raw_response;
+    raw_response.length=0;
     if (nread > 0)
     {
         write_req_t *req = (write_req_t *)malloc(sizeof(write_req_t));
         req->buf = uv_buf_init(buf->base, nread);
         // printf("\necho_read:\t  %s\n", (char *)(req->buf.base));
-
-        StringType raw_response;
-        raw_response.ch=req->buf.base;
-        raw_response.length=req->buf.len;
+        my_strcpy(raw_response,req->buf.base,(long long)req->buf.len);
         if(cb!=nullptr){
             (*cb)(&raw_response,nullptr);
         }
+        free(raw_response.ch);
         // uv_write((uv_write_t *)req, client_stream, &req->buf, 1, echo_write);
         return;
     }
@@ -82,7 +82,7 @@ void my_tcp_client::echo_read(uv_stream_t *client_stream, ssize_t nread, const u
             fprintf(stderr, "Client Read error %s\n", uv_err_name(nread));
         uv_close((uv_handle_t *)client_stream, NULL);
     }
-
+    free(raw_response.ch);
     free(buf->base);
 }
 

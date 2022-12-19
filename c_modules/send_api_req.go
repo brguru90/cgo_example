@@ -16,7 +16,7 @@ import "C"
 import (
 	"bufio"
 	"bytes"
-	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -71,16 +71,16 @@ type thread_data_to_json_type struct {
 }
 
 //export thread_data_to_json
-func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end C.int) C.struct_StringType {
-	
+func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end C.int) C.struct_StringType {	
 	td_arr := carray2slice(td, int(_len))
 	td_slice := []ResponseDataCMap{}
 
 	for _, td_item := range td_arr {
-		// println(k,"serialized Response_body",C.GoString(td_item.Response_body))
+		// println("serialized Response_body",int(td_item.Status_code))
 		td_slice = append(td_slice, ResponseDataCMap{
 			Debug:                         int(td_item.Debug),
 			Uid:                           C.GoString(td_item.Uid),
+			Status_code:                   int(td_item.Status_code),
 			Response_header:               C.GoString(td_item.Response_header),
 			Response_body:                 C.GoString(td_item.Response_body),
 			Before_connect_time_microsec:  int64(td_item.Before_connect_time_microsec),
@@ -92,8 +92,7 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 			Time_to_first_byte_microsec:   int64(td_item.Time_to_first_byte_microsec),
 			Total_time_from_curl_microsec: int64(td_item.Total_time_from_curl_microsec),
 			Total_time_microsec:           int64(td_item.Total_time_microsec),
-			Status_code:                   int(td_item.Status_code),
-			Err_code:                      int(td_item.Status_code),
+			Err_code:                      int(td_item.Err_code),
 		})
 	}
 
@@ -103,12 +102,12 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 		End:   int(end),
 	}
 	// println("thread_data_to_json",_len)
-	// json.Marshal freezes on large data
-	var struct_in_bytes bytes.Buffer 
-	enc:=gob.NewEncoder(&struct_in_bytes) 
-	err := enc.Encode(serialize_to)
+	// json.Marshal freezes on large data due to GC
+	// var struct_in_bytes bytes.Buffer 
+	// enc:=gob.NewEncoder(&struct_in_bytes) 
+	// err := enc.Encode(serialize_to)
 	// println("thread_data_to_json2",struct_in_bytes.Len())
-	// _json_bytes, err := json.Marshal(serialize_to)
+	_json_bytes, err := json.Marshal(serialize_to)
 	if err != nil {
 		return C.struct_StringType{}
 	}
@@ -119,17 +118,19 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 	// println("thread_data_to_json2",len(string(_json_bytes)))
 	// return C.CString(string(_json_bytes))
 	// return C.CString("")
-	cb:=C.CBytes(struct_in_bytes.Bytes())
+	// cb:=C.CBytes(struct_in_bytes.Bytes())
+	cb:=C.CBytes(_json_bytes)
 	// defer C.free(unsafe.Pointer(cb))
 	// return  (*C.char)(cb)	
 	return  C.struct_StringType{
 		ch:(*C.char)(cb),
-		length:C.ulong(struct_in_bytes.Len()),
+		length:C.ulong(len(_json_bytes)),
 	}
 }
 
 //export json_to_thread_data
 func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_ResponseDeserialized {
+    // defer C.free(unsafe.Pointer(json_data))
 	go_str_len := uint64(str_len)
 	// println("go_str_len", go_str_len)
 	mySlice := (*[1 << 30]byte)(unsafe.Pointer(json_data))[:go_str_len:go_str_len]
@@ -142,15 +143,15 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 
 	returnStruct := (*C.struct_ResponseDeserialized)(C.malloc(C.size_t(unsafe.Sizeof(C.struct_ResponseDeserialized{}))))
 
-	var struct_in_bytes bytes.Buffer 
-	struct_in_bytes.Write(mySlice)
-	dec := gob.NewDecoder(&struct_in_bytes)
+	// var struct_in_bytes bytes.Buffer 
+	// struct_in_bytes.Write(mySlice)
+	// dec := gob.NewDecoder(&struct_in_bytes)
 
 	var response_data thread_data_to_json_type
-	err := dec.Decode(&response_data)
+	// err := dec.Decode(&response_data)
 
-	println("json_to_thread_data",len(response_data.Data))
-	// err := json.Unmarshal(mySlice, &response_data)
+	err := json.Unmarshal(mySlice, &response_data)
+	// println("json_to_thread_data",len(response_data.Data))
 	if err != nil {
 		// println(string(mySlice))
 		// fmt.Printf("mystr:\t %02X \n", mySlice)
@@ -188,7 +189,7 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 			Err_code:                      C.int(rd.Err_code),
 		}
 	}
-	println("json_to_thread_data2",len(response_data_c_slice))
+	// println("json_to_thread_data2",len(response_data_c_slice))
 	returnStruct.data = (*C.struct_ResponseData)(response_data_c_array)
 	returnStruct.len = C.int(len(response_data.Data))
 	returnStruct.start = C.int(response_data.Start)
@@ -223,7 +224,7 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 
 func Call_api() {
 	// debug.SetGCPercent(-1)
-	total_requests := 4000
+	total_requests := 10000
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://127.0.0.1:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"

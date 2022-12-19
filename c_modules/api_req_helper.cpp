@@ -98,7 +98,7 @@ void send_data(string_type main_raw_response, int start)
         uv_write_t *req = client.write2server(client_stream, main_raw_response.ch, main_raw_response.length, nullptr);
         auto cb2 = [&](StringType *raw_response2, uv_stream_t *client_stream2)
         {
-            // printf("\n\n\n\n\nraw_response2=%s\n",raw_response2->ch);
+            // printf("\n\n\n\n\nraw_response2=%s\n", raw_response2->ch);
             // client.free_write_req(req);
             client.stop_client();
         };
@@ -139,16 +139,16 @@ void update_response_data(int thread_size, response_data *response_ref)
 {
     auto lamda = [&](StringType *raw_response) -> void
     {
-        size_t orig_len=raw_response->length;
+        size_t orig_len = raw_response->length;
         printf("\n\nlen of raw final data from IPC(recv)->%ld\n", raw_response->length);
         raw_response->length = raw_response->length - strlen(end_of_data);
         // printf("\nlast char=%c", raw_response->ch[raw_response->length - 1]);
         // printf("\n\nraw final data from IPC->%ld,%s\n", raw_response->length, raw_response->ch);
         // char tmp[raw_response->length];
         char *tmp = (char *)malloc(sizeof(char) * (raw_response->length + 1));
-        size_t final_len=raw_response->length;
+        size_t final_len = raw_response->length;
         bzero(tmp, final_len + 1);
-        memmove(tmp, raw_response->ch, final_len);        
+        memmove(tmp, raw_response->ch, final_len);
         // tmp[raw_response->length]='\0';
         // raw_response->length++;
         // for(int i=raw_response->length-10;i<raw_response->length;i++){
@@ -160,8 +160,8 @@ void update_response_data(int thread_size, response_data *response_ref)
         //     printf("%c-%02X ", tmp[i],tmp[i]);
         // }
         // printf("\n");
-        printf("\n\nlen of final data from IPC->%ld\n", final_len);
-        response_deserialized_type *response_deserialized = json_to_thread_data(tmp,(size_t)final_len);
+        // printf("\n\nlen of final data from IPC->%ld\n", final_len);
+        response_deserialized_type *response_deserialized = json_to_thread_data(tmp, (size_t)final_len);
         // printf("response_deserialized len=%d\n", response_deserialized->len);
         // // for (int l = 0; l < raw_response->length; l++)
         // //     printf("%02X ", raw_response->ch[l]);
@@ -171,8 +171,6 @@ void update_response_data(int thread_size, response_data *response_ref)
             response_ref[i] = response_deserialized->data[i - response_deserialized->start];
         }
         free(response_deserialized);
-        bzero(raw_response->ch, orig_len);
-        free(raw_response->ch);
     };
     // auto *closure = new std::function<void(StringType *raw_response)>(lamda);
     auto lamda_with_context = Closure_raw_response::create<void>(lamda);
@@ -294,20 +292,44 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             thread_data td = (thread_data)threads_data[p];
             int start = td.th_pool_data.start_index;
             int end = td.th_pool_data.end_index;
-            response_data *td_arr = (response_data *)malloc(sizeof(response_data) * (end - start + 1));
-            for (int k = start; k <= end; k++)
-            {
-                int m = k - start;
-                td_arr[m] = td.response_ref_ptr[k];
-                // printf("thread=%d,Status_code=>%d\n",td.thread_id,td.response_ref_ptr[k].Status_code);
-                // printf("Response_header=%s\n",td.response_ref_ptr[k].Resp_header);
-                // printf("Response_body1=>%d,%d) %s\n",m,k,td_arr[m].Response_body);
-            }
+
+            // response_data *td_arr = (response_data *)malloc(sizeof(response_data) * (end - start + 1));
+            // for (int k = start; k <= end; k++)
+            // {
+            //     int m = k - start;
+            //     td_arr[m] = td.response_ref_ptr[k];
+            // }
             // printf("start=%d,end=%d,len=%d\n",start,end,end-start+1);
-            printf("--------- event loop ended  -------------\n");
-            string_type serialized = thread_data_to_json(td_arr, end - start + 1, start, end);
+            // string_type serialized = thread_data_to_json(td_arr, end-start+1, start, end);
+            // threads_data[p].api_req_async_on_thread->~api_req_async();
+            // free(td_arr);
+            // send_data(serialized, start);
+
+            printf("--------- main event loop ended start=%d,end=%d,%d -------------\n", start, end, (end - start + 1));
+            int array_subset_len = 50;
+            int split_count = ceil((float)(end - start + 1) / (float)array_subset_len);
+            printf("split_count=%d,%d\n", (end - start + 1), split_count);
+            for (int i = 0; i < split_count; i++)
+            {
+                int _start = start + (i * array_subset_len);
+                int _end = _start + array_subset_len;
+                _end = end >= _end ? _end + 1 : end;
+                // printf("--------- event loop ended start=%d,end=%d -------------\n", _start, _end);
+                response_data *temp_td_arr = (response_data *)malloc(sizeof(response_data) * (_end - _start+1));
+                for (int j = _start; j <= _end; j++)
+                {
+                    temp_td_arr[j - _start] = td.response_ref_ptr[j];
+                }
+                string_type serialized = thread_data_to_json(temp_td_arr, _end-_start+1, _start, _end);
+                free(temp_td_arr);
+                send_data(serialized, _start);
+            }
+
             threads_data[p].api_req_async_on_thread->~api_req_async();
-            free(td_arr);
+
+            // string_type serialized = thread_data_to_json(td_arr, end - start + 1, start, end);
+            // threads_data[p].api_req_async_on_thread->~api_req_async();
+            // free(td_arr);
 
             // char buffer[1024];
             // snprintf(buffer, sizeof(buffer),"./json_bytes1_%d.json",start);
@@ -324,8 +346,8 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             // for (int l = 0; l < sizeof(bytes); l++)
             //     printf("%02X ", bytes[l]);
             // printf("\n");
-            printf("--------- serializer ended - start=%d,len=%ld -------------\n", start, serialized.length);
-            send_data(serialized, start);
+            // printf("--------- serializer ended - start=%d,len=%ld -------------\n", start, serialized.length);
+            // send_data(serialized, start);
             exit(0);
         }
     }

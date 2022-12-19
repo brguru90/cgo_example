@@ -111,7 +111,6 @@ public:
     ~my_tcp_client();
     void register_ipc_received_callback(ipc_received_cb_data_type *get_received_data_cb);
     uv_write_t *write2server(uv_stream_t *stream, char *data, size_t len2, uv_write_t *req);
-    uv_write_t *stream2server(uv_stream_t *stream, StringType data,int chunk_size);
     void read_response(uv_stream_t *stream, ipc_received_cb_data_type *cb);
     void free_write_req(uv_write_t *req);
     int start_client();
