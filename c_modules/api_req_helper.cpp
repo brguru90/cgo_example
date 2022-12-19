@@ -306,7 +306,7 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
             // send_data(serialized, start);
 
             printf("--------- main event loop ended start=%d,end=%d,%d -------------\n", start, end, (end - start + 1));
-            int array_subset_len = 50;
+            int array_subset_len = 100;
             int split_count = ceil((float)(end - start + 1) / (float)array_subset_len);
             printf("split_count=%d,%d\n", (end - start + 1), split_count);
             for (int i = 0; i < split_count; i++)
