@@ -96,18 +96,19 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 		})
 	}
 
+	println("thread_data_to_json 1",_len,len(td_arr))
 	serialize_to := thread_data_to_json_type{
 		Data:  td_slice,
 		Start: int(start),
 		End:   int(end),
 	}
-	// println("thread_data_to_json",_len)
+	println("thread_data_to_json",_len)
 	// json.Marshal freezes on large data due to GC
 	// var struct_in_bytes bytes.Buffer 
 	// enc:=gob.NewEncoder(&struct_in_bytes) 
 	// err := enc.Encode(serialize_to)
-	// println("thread_data_to_json2",struct_in_bytes.Len())
 	_json_bytes, err := json.Marshal(serialize_to)
+	println("thread_data_to_json2",len(_json_bytes))
 	if err != nil {
 		return C.struct_StringType{}
 	}
@@ -269,13 +270,22 @@ func Call_api() {
 		}
 	}
 
-	bulk_response_data := make([]C.struct_ResponseData, total_requests)
 
 
 	ram_size_in_GB := float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE)) / (1024 * 1024)
 	nor_of_thread := math.Ceil(ram_size_in_GB / 70)
 	fmt.Println("go Nor of threads", nor_of_thread)
 
+
+	// c_bulk_response_data := C.malloc(C.size_t(total_requests) * C.sizeof_struct_ResponseData)
+	// defer C.free(unsafe.Pointer(c_bulk_response_data))
+	// bulk_response_data := (*[1<<30 - 1]C.struct_ResponseData)(c_bulk_response_data)
+	// debug.SetGCPercent(-1)
+	// C.send_request_in_concurrently(&(request_input[0]),  (*C.struct_ResponseData)(c_bulk_response_data), C.int(total_requests), C.int(runtime.NumCPU()), 0)
+	// debug.SetGCPercent(100)
+
+
+	bulk_response_data := make([]C.struct_ResponseData, total_requests)
 	// runtime.KeepAlive(request_input)
 	// runtime.KeepAlive(bulk_response_data)
 	debug.SetGCPercent(-1)
