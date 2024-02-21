@@ -504,7 +504,7 @@ static void curl_perform(curl_handlers_t curl_handlers, uv_poll_t *req, int stat
 void on_timeout(curl_handlers_t curl_handlers, uv_timer_t *req)
 {
     printf("om timeout");
-    printf("check pointer=%d,%d\n", global_curl_handlers, &curl_handlers);
+    printf("check pointer=%ld,%ld\n", (long)global_curl_handlers, (long)&curl_handlers);
     int running_handles;
     CURLMcode res;
     res = curl_multi_socket_action(curl_handlers.curl_handle, CURL_SOCKET_TIMEOUT, 0,
@@ -577,9 +577,9 @@ int start_timeout(curl_handlers_t *curl_handlers, CURLM *multi, long timeout_ms,
     //                                                                             //  on_timeout(curl_handlers, req);
     //                                                                           });
 
-    printf("global_curl_handlers->timeout=%d\n", curl_handlers->timeout);
+    // printf("global_curl_handlers->timeout=%d\n", curl_handlers->timeout);
 
-    printf("start_timeout check pointer=%d,%d\n", global_curl_handlers, curl_handlers);
+    printf("start_timeout check pointer=%ld,%ld\n", (long)global_curl_handlers,(long) curl_handlers);
 
     long curl_handlers_temp = 10;
 
@@ -592,11 +592,11 @@ int start_timeout(curl_handlers_t *curl_handlers, CURLM *multi, long timeout_ms,
         if (timeout_ms == 0)
             timeout_ms = 1; /* 0 means directly call socket_action, but we will do it
                                in a bit */
-        printf("on_timeout check pointer,,=%d,%d\n", global_curl_handlers, curl_handlers_temp);
+        printf("on_timeout check pointer,,=%ld,%ld\n", (long)global_curl_handlers, curl_handlers_temp);
         auto on_timeout_with_context = [curl_handlers_temp](uv_timer_t *req)
         {
             // !!!! some reason here pointer address getting modified
-            printf("~~on_timeout check pointer,,,,=%d,%d\n", global_curl_handlers, curl_handlers_temp);
+            printf("~~on_timeout check pointer,,,,=%ld,%ld\n", (long)global_curl_handlers, curl_handlers_temp);
             // return on_timeout(*curl_handlers, req);
         };
         auto closure = Closure_on_timeout::create<void>(on_timeout_with_context);
