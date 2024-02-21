@@ -11,7 +11,7 @@
             "mode": "debug",
             "program": "main.go",
             "env": {
-                "GOGC": "off",
+                "GOGC": "on",
             },
             "args": [" -gcflags=all=\"-N -l\"", " -race"]
         }

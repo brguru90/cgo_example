@@ -22,9 +22,13 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"os"
+	"os/signal"
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"runtime/pprof"
+	"syscall"
 
 	"strings"
 	"unsafe"
@@ -34,16 +38,6 @@ func check_error(err error) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData {
-	var list []C.struct_ResponseData
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
-	sliceHeader.Cap = len
-	sliceHeader.Len = len
-	sliceHeader.Data = uintptr(unsafe.Pointer(array))
-	return list
-	// return (*[1 << 30]C.struct_ResponseData)(unsafe.Pointer(array))[:len:len]
 }
 
 type ResponseDataCMap struct {
@@ -70,8 +64,35 @@ type thread_data_to_json_type struct {
 	End   int
 }
 
+
+type arena []unsafe.Pointer
+
+func (a *arena) malloc(p_size C.size_t) unsafe.Pointer{
+	ptr:=C.malloc(p_size)
+	*a=append(*a, ptr)
+	return ptr
+}
+
+
+func  (a *arena) free(){
+	for _,ptr:=range *a{
+		C.free(ptr)
+	}
+}
+
+
+func carray2slice(array *C.struct_ResponseData, len int) []C.struct_ResponseData {
+	var list []C.struct_ResponseData
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
+	sliceHeader.Cap = len
+	sliceHeader.Len = len
+	sliceHeader.Data = uintptr(unsafe.Pointer(array))
+	return list
+	// return (*[1 << 30]C.struct_ResponseData)(unsafe.Pointer(array))[:len:len]
+}
+
 //export thread_data_to_json
-func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end C.int) C.struct_StringType {	
+func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end C.int) C.struct_StringType {
 	td_arr := carray2slice(td, int(_len))
 	td_slice := []ResponseDataCMap{}
 
@@ -96,19 +117,18 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 		})
 	}
 
-	println("thread_data_to_json 1",_len,len(td_arr))
 	serialize_to := thread_data_to_json_type{
 		Data:  td_slice,
 		Start: int(start),
 		End:   int(end),
 	}
-	println("thread_data_to_json",_len)
+	println("thread_data_to_json", _len, len(td_arr))
 	// json.Marshal freezes on large data due to GC
-	// var struct_in_bytes bytes.Buffer 
-	// enc:=gob.NewEncoder(&struct_in_bytes) 
+	// var struct_in_bytes bytes.Buffer
+	// enc:=gob.NewEncoder(&struct_in_bytes)
 	// err := enc.Encode(serialize_to)
 	_json_bytes, err := json.Marshal(serialize_to)
-	println("thread_data_to_json2",len(_json_bytes))
+	println("thread_data_to_json2", len(_json_bytes))
 	if err != nil {
 		return C.struct_StringType{}
 	}
@@ -120,18 +140,18 @@ func thread_data_to_json(td *C.struct_ResponseData, _len C.int, start C.int, end
 	// return C.CString(string(_json_bytes))
 	// return C.CString("")
 	// cb:=C.CBytes(struct_in_bytes.Bytes())
-	cb:=C.CBytes(_json_bytes)
+	cb := C.CBytes(_json_bytes)
 	// defer C.free(unsafe.Pointer(cb))
-	// return  (*C.char)(cb)	
-	return  C.struct_StringType{
-		ch:(*C.char)(cb),
-		length:C.ulong(len(_json_bytes)),
+	// return  (*C.char)(cb)
+	return C.struct_StringType{
+		ch:     (*C.char)(cb),
+		length: C.ulong(len(_json_bytes)),
 	}
 }
 
 //export json_to_thread_data
 func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_ResponseDeserialized {
-    // defer C.free(unsafe.Pointer(json_data))
+	// defer C.free(unsafe.Pointer(json_data))
 	go_str_len := uint64(str_len)
 	// println("go_str_len", go_str_len)
 	mySlice := (*[1 << 30]byte)(unsafe.Pointer(json_data))[:go_str_len:go_str_len]
@@ -144,11 +164,15 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 
 	returnStruct := (*C.struct_ResponseDeserialized)(C.malloc(C.size_t(unsafe.Sizeof(C.struct_ResponseDeserialized{}))))
 
-	// var struct_in_bytes bytes.Buffer 
+	// var struct_in_bytes bytes.Buffer
 	// struct_in_bytes.Write(mySlice)
 	// dec := gob.NewDecoder(&struct_in_bytes)
 
 	var response_data thread_data_to_json_type
+	returnStruct.data = nil
+	returnStruct.len = C.int(0)
+	returnStruct.start = C.int(0)
+	returnStruct.end = C.int(0)
 	// err := dec.Decode(&response_data)
 
 	err := json.Unmarshal(mySlice, &response_data)
@@ -160,10 +184,6 @@ func json_to_thread_data(json_data *C.char, str_len C.size_t) *C.struct_Response
 		// check_error(err2)
 
 		check_error(err)
-		returnStruct.data = nil
-		returnStruct.len = C.int(0)
-		returnStruct.start = C.int(0)
-		returnStruct.end = C.int(0)
 		return returnStruct
 	}
 	response_data_c_array := C.malloc(C.size_t(len(response_data.Data)) * C.sizeof_struct_ResponseData)
@@ -224,8 +244,30 @@ func parseHttpResponse(header string, _body string, req *http.Request) (*http.Re
 }
 
 func Call_api() {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT)
+	memprof, memErr := os.Create("mem.pprof")
+	cpuprof, cpuErr := os.Create("cpu.pprof")
+	go func() {
+		pprof.StartCPUProfile(cpuprof)
+		select {
+		case sig := <-sigs:
+			fmt.Printf("Got %s signal. Collecting profile data\n", sig)
+			if memprof != nil && memErr == nil {
+				pprof.WriteHeapProfile(memprof)
+				memprof.Close()
+			}
+
+			if cpuprof != nil && cpuErr == nil {
+				pprof.StopCPUProfile()
+			}
+			fmt.Printf("Done Collecting profile data\n", sig)
+			os.Exit(1)
+		}
+	}()
+
 	// debug.SetGCPercent(-1)
-	total_requests := 10000
+	total_requests := 50000
 	// url := "http://localhost:8000/api/hello/1?query=text"
 	url := "http://127.0.0.1:8000/api/user/"
 	// url := "http://guruinfo.epizy.com/edu.php"
@@ -270,12 +312,9 @@ func Call_api() {
 		}
 	}
 
-
-
 	ram_size_in_GB := float64(C.sysconf(C._SC_PHYS_PAGES)*C.sysconf(C._SC_PAGE_SIZE)) / (1024 * 1024)
 	nor_of_thread := math.Ceil(ram_size_in_GB / 70)
 	fmt.Println("go Nor of threads", nor_of_thread)
-
 
 	// c_bulk_response_data := C.malloc(C.size_t(total_requests) * C.sizeof_struct_ResponseData)
 	// defer C.free(unsafe.Pointer(c_bulk_response_data))
@@ -284,26 +323,26 @@ func Call_api() {
 	// C.send_request_in_concurrently(&(request_input[0]),  (*C.struct_ResponseData)(c_bulk_response_data), C.int(total_requests), C.int(runtime.NumCPU()), 0)
 	// debug.SetGCPercent(100)
 
-
 	bulk_response_data := make([]C.struct_ResponseData, total_requests)
-	// runtime.KeepAlive(request_input)
-	// runtime.KeepAlive(bulk_response_data)
-	debug.SetGCPercent(-1)
+	runtime.KeepAlive(request_input)
+	runtime.KeepAlive(bulk_response_data)
+	// debug.SetGCPercent(-1)
 	C.send_request_in_concurrently(&(request_input[0]), &(bulk_response_data[0]), C.int(total_requests), C.int(runtime.NumCPU()), 0)
 	debug.SetGCPercent(100)
-	var status_codes=make(map[int]int)
+
+	var status_codes = make(map[int]int)
 	for i = 0; i < total_requests; i++ {
 		// fmt.Println("Response_body=",C.GoString(bulk_response_data[i].Response_body))
 		// fmt.Print("go status=", int(bulk_response_data[i].Status_code),",")
-		_,ok:=status_codes[int(bulk_response_data[i].Status_code)]
-		if ok{
+		_, ok := status_codes[int(bulk_response_data[i].Status_code)]
+		if ok {
 			status_codes[int(bulk_response_data[i].Status_code)]++
-		} else{
-			status_codes[int(bulk_response_data[i].Status_code)]=1
+		} else {
+			status_codes[int(bulk_response_data[i].Status_code)] = 1
 		}
 	}
 	for k, v := range status_codes {
-		fmt.Printf("status_code=%d,count=%d\n",k,v)
+		fmt.Printf("status_code=%d,count=%d\n", k, v)
 	}
 	// for i = 0; i < total_requests; i++ {
 	// 	// fmt.Println(i,C.GoString(bulk_response_data[i].response_body))

@@ -1,6 +1,9 @@
 package main
 
-import "c_in_go/c_modules"
+import (
+	"c_in_go/c_modules"
+	"time"
+)
 
 // https://codeahoy.com/learn/libuv/ch5/
 
@@ -10,4 +13,5 @@ import "c_in_go/c_modules"
 
 func main() {
 	c_modules.Call_api()
+	time.Sleep(time.Second*100)
 }

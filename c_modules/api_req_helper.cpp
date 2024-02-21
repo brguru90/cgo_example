@@ -108,6 +108,7 @@ void send_data(string_type main_raw_response, int start)
     auto _closure_cb = Closure_my_tcp_server_cb::create<void>(cb);
     client.register_ipc_received_callback(&_closure_cb);
     client.start_client();
+    free(main_raw_response.ch);
 }
 
 struct Closure_raw_response
@@ -314,7 +315,7 @@ void create_process(int thread_size, int total_requests, uv_thread_t *threads, t
                 int _start = start + (i * array_subset_len);
                 int _end = _start + array_subset_len;
                 _end = end >= _end ? _end + 1 : end;
-                // printf("--------- event loop ended start=%d,end=%d -------------\n", _start, _end);
+                printf("--------- event loop ended start=%d,end=%d -------------\n", _start, _end);
                 response_data *temp_td_arr = (response_data *)malloc(sizeof(response_data) * (_end - _start+1));
                 for (int j = _start; j <= _end; j++)
                 {
